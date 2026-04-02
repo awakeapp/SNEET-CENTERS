@@ -457,3 +457,154 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
   }
 }
+
+/* ─── FIND NEAREST BUTTON ─── */
+.find-nearest-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.85rem;
+  margin-top: 1rem;
+  background: white;
+  color: var(--primary);
+  border: 1.5px solid var(--primary-soft);
+  border-radius: var(--r-lg);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.find-nearest-btn:hover {
+  background: var(--primary-soft);
+  transform: translateY(-1px);
+}
+
+.find-nearest-btn:active {
+  transform: scale(0.98);
+}
+
+/* ─── PIN MODAL ─── */
+.pin-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pin-modal-content {
+  background: white;
+  width: 100%;
+  max-width: 400px;
+  border-radius: var(--r-xl);
+  padding: 2rem;
+  box-shadow: var(--shadow-lg);
+  animation: modalSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalSlide {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.pin-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.pin-modal-header h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-1);
+}
+
+.close-modal {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.pin-modal-desc {
+  font-size: 0.9rem;
+  color: var(--text-2);
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.pin-input-group {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.pin-input-group input {
+  flex: 1;
+  padding: 1rem 1.25rem;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-align: center;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.pin-input-group input:focus {
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.pin-input-group button {
+  padding: 0 1.5rem;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--r-md);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pin-input-group button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pin-modal-note {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  text-align: center;
+  background: #F8FAFC;
+  padding: 0.75rem;
+  border-radius: var(--r-sm);
+  line-height: 1.4;
+}
+
+/* Adjust for desktop sidebar */
+@media (min-width: 900px) {
+  .find-nearest-btn {
+    margin-top: 1.5rem;
+  }
+}

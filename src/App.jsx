@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MapPin, Phone, Building, Navigation, User, X, School, Map } from 'lucide-react';
+import { Search, MapPin, Phone, Building, Navigation, User, X, School, Map, Crosshair } from 'lucide-react';
 import Papa from 'papaparse';
 import './index.css';
 
@@ -11,6 +11,9 @@ function App() {
   const [boysData, setBoysData] = useState([]);
   const [girlsData, setGirlsData] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [isPinSearching, setIsPinSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -124,6 +127,43 @@ function App() {
     );
   }, [searchQuery, activeData]);
 
+  const handlePinSubmit = async (e) => {
+    e.preventDefault();
+    if (!pinInput.trim()) return;
+
+    setIsPinSearching(true);
+    try {
+      // Use Indian Post Office API
+      const res = await fetch(`https://api.postalpincode.in/pincode/${pinInput.trim()}`);
+      const data = await res.json();
+
+      if (data[0].Status === "Success" && data[0].PostOffice) {
+        const district = data[0].PostOffice[0].District;
+        
+        // Auto-Switch logic: Check if girls data has more results for this district
+        const boysRes = boysData.filter(c => c.district.toLowerCase().includes(district.toLowerCase())).length;
+        const girlsRes = girlsData.filter(c => c.district.toLowerCase().includes(district.toLowerCase())).length;
+
+        if (girlsRes > boysRes && genderFilter === 'boys') {
+          setGenderFilter('girls');
+        } else if (boysRes > girlsRes && genderFilter === 'girls') {
+          setGenderFilter('boys');
+        }
+
+        setSearchQuery(district);
+        setShowPinModal(false);
+        setPinInput('');
+      } else {
+        alert("PIN Code not found or not supported. Try searching by Name.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error finding location. Please check your connection.");
+    } finally {
+      setIsPinSearching(false);
+    }
+  };
+
   const renderSkeletons = () => (
     <div className="centers-grid">
       {[1, 2, 3, 4, 5, 6].map(i => (
@@ -224,6 +264,45 @@ function App() {
             </div>
           )}
         </div>
+
+        <button 
+          className="find-nearest-btn"
+          onClick={() => setShowPinModal(true)}
+        >
+          <Crosshair size={18} />
+          Find Nearest Center
+        </button>
+
+        {/* PIN Entry Modal */}
+        {showPinModal && (
+          <div className="pin-modal-overlay">
+            <div className="pin-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="pin-modal-header">
+                <h3>Find Nearest</h3>
+                <button className="close-modal" onClick={() => setShowPinModal(false)}><X size={20} /></button>
+              </div>
+              <p className="pin-modal-desc">Enter your 6-digit PIN code to find centers in your district.</p>
+              <form onSubmit={handlePinSubmit}>
+                <div className="pin-input-group">
+                  <input 
+                    type="text" 
+                    pattern="[0-9]*"
+                    inputMode="numeric"
+                    maxLength="6"
+                    placeholder="Enter 6-digit PIN"
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                    autoFocus
+                  />
+                  <button type="submit" disabled={isPinSearching || pinInput.length < 6}>
+                    {isPinSearching ? "Searching..." : "Find"}
+                  </button>
+                </div>
+              </form>
+              <p className="pin-modal-note">Note: For Middle East & International locations, please use the search bar directly.</p>
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );
