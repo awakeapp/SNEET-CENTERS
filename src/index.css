@@ -65,13 +65,6 @@ input, textarea {
   display: contents; /* Transparent wrapper on mobile */
 }
 
-.sidebar {
-  /* No sidebar on mobile — elements flow normally */
-}
-
-.main-content {
-  /* Full width on mobile */
-}
 
 
 /* ─── DESKTOP LAYOUT (≥ 900px) ─── */

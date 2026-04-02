@@ -10,11 +10,10 @@ function App() {
   const [genderFilter, setGenderFilter] = useState('boys');
   const [boysData, setBoysData] = useState([]);
   const [girlsData, setGirlsData] = useState([]);
-  
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState('');
   const searchRef = React.useRef(null);
 
   const parseCsvData = (csvText) => {
@@ -23,40 +22,40 @@ function App() {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
-          let currentDistrict = "Unknown";
+          let currentDistrict = 'Unknown';
           const formatted = results.data.map((row, index) => {
             const rowDist = (row['DISTRICT'] || '').trim();
-            if (rowDist !== '') {
-              currentDistrict = rowDist;
-            }
-            
+            if (rowDist !== '') currentDistrict = rowDist;
+
             const centerName = (row['NAME OF THE EXAM CENTRE'] || '').trim();
             const coordText = (row['CENTRE COORDINATOR NUMBER'] || '').trim();
             const mapLink = (row['MAP'] || '').trim();
 
             const phoneMatch = coordText.match(/[\d+\-\s]{10,15}/);
             const extractedPhone = phoneMatch ? phoneMatch[0].trim() : '';
-            
+
             let coordNameOnly = coordText;
             if (extractedPhone) {
-              // Strip the phone number and trailing/leading punctuation
-              coordNameOnly = coordText.replace(extractedPhone, '').replace(/[,\-():]+/g, ' ').replace(/\s\s+/g, ' ').trim();
+              coordNameOnly = coordText
+                .replace(extractedPhone, '')
+                .replace(/[,\-():]+/g, ' ')
+                .replace(/\s\s+/g, ' ')
+                .trim();
             }
 
             return {
               id: index,
               district: currentDistrict,
-              centerName: centerName,
+              centerName,
               coordinator: coordNameOnly || 'Help Desk',
               phone: extractedPhone,
-              mapLink: mapLink
+              mapLink,
             };
           }).filter(c => c.centerName !== '');
-          
-          // Preserve the original order from the Google Sheet
+
           resolve(formatted);
         },
-        error: (err) => reject(err)
+        error: (err) => reject(err),
       });
     });
   };
@@ -68,50 +67,41 @@ function App() {
         const cacheBust = `&t=${Date.now()}`;
         const [boysRes, girlsRes] = await Promise.all([
           fetch(BOYS_CSV_URL + cacheBust, { cache: 'no-store' }),
-          fetch(GIRLS_CSV_URL + cacheBust, { cache: 'no-store' })
+          fetch(GIRLS_CSV_URL + cacheBust, { cache: 'no-store' }),
         ]);
-
         const boysText = await boysRes.text();
         const girlsText = await girlsRes.text();
-
         const [boysJson, girlsJson] = await Promise.all([
           parseCsvData(boysText),
-          parseCsvData(girlsText)
+          parseCsvData(girlsText),
         ]);
-
         setBoysData(boysJson);
         setGirlsData(girlsJson);
       } catch (err) {
-        console.error("Error loading CSV:", err);
-        setErrorMsg("Failed to load data. Please check connection.");
+        console.error('Error loading CSV:', err);
+        setErrorMsg('Failed to load data. Please check connection.');
       } finally {
         setLoading(false);
       }
     };
-    
     fetchData();
   }, []);
 
   const activeData = genderFilter === 'boys' ? boysData : girlsData;
 
-  // Build unique suggestions: distinct district names + center names
   const suggestions = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase().trim();
-
     const districtMatches = [...new Set(activeData.map(c => c.district))]
       .filter(d => d.toLowerCase().includes(query))
       .map(d => ({ type: 'district', label: d }));
-
     const centerMatches = activeData
       .filter(c => c.centerName.toLowerCase().includes(query))
       .slice(0, 6)
       .map(c => ({ type: 'center', label: c.centerName, district: c.district }));
-
     return [...districtMatches.slice(0, 3), ...centerMatches].slice(0, 8);
   }, [searchQuery, activeData]);
 
-  // Close suggestions when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -129,17 +119,14 @@ function App() {
   const filteredCenters = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return activeData;
-    
-    return activeData.filter(center => 
-      center.centerName.toLowerCase().includes(query) ||
-      center.district.toLowerCase().includes(query)
+    return activeData.filter(
+      c => c.centerName.toLowerCase().includes(query) || c.district.toLowerCase().includes(query)
     );
   }, [searchQuery, activeData]);
 
-  // Loading Skeleton Component
   const renderSkeletons = () => (
     <div className="centers-grid">
-      {[1, 2, 3, 4].map(i => (
+      {[1, 2, 3, 4, 5, 6].map(i => (
         <div key={i} className="skeleton-card">
           <div className="sk-tag skeleton"></div>
           <div className="sk-title skeleton"></div>
@@ -154,105 +141,98 @@ function App() {
     </div>
   );
 
-  return (
-    <div className="app-container">
-      {/* Header */}
-      <header className="header">
-        <div className="header-card">
-          <img 
-            src="/HEADER.jpg" 
-            alt="SNEET Centers" 
-            className="header-image"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
-          />
-          {/* Fallback shown if the user hasn't saved the image in the public folder yet */}
-          <div className="header-fallback" style={{ display: 'none' }}>
-            <h1 className="fallback-title">SNEET CENTERS</h1>
-            <p className="fallback-subtitle">Save your image as <strong>HEADER.jpg</strong> in the <code>public</code> folder</p>
+  const Sidebar = (
+    <aside className="sidebar">
+      <div className="sidebar-inner">
+        {/* Header Banner */}
+        <header className="header">
+          <div className="header-card">
+            <img
+              src="/HEADER.jpg"
+              alt="SNEET Centers"
+              className="header-image"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            <div className="header-fallback" style={{ display: 'none' }}>
+              <h1 className="fallback-title">SNEET CENTERS</h1>
+              <p className="fallback-subtitle">
+                Save your image as <strong>HEADER.jpg</strong> in the <code>public</code> folder
+              </p>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Segmented Control */}
-      <div className="segmented-control">
-        <button 
-          className={`segment-btn ${genderFilter === 'boys' ? 'active' : ''}`}
-          onClick={() => setGenderFilter('boys')}
-        >
-          Boys Centers ({boysData.length || '-'})
-        </button>
-        <button 
-          className={`segment-btn ${genderFilter === 'girls' ? 'active' : ''}`}
-          onClick={() => setGenderFilter('girls')}
-        >
-          Girls Centers ({girlsData.length || '-'})
-        </button>
-      </div>
-
-      {/* Search Bar */}
-      <div className="search-wrapper" ref={searchRef}>
-        <div className="search-input-container">
-          <Search className="search-icon" size={20} />
-          <input 
-            type="text" 
-            className="search-input"
-            placeholder="Search center name or district..."
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
-            onFocus={() => setShowSuggestions(true)}
-            autoComplete="off"
-          />
-          <button 
-            className="clear-search" 
-            onClick={() => { setSearchQuery(''); setShowSuggestions(false); }}
-            aria-label="Clear search"
+        {/* Gender Toggle */}
+        <div className="segmented-control">
+          <button
+            className={`segment-btn ${genderFilter === 'boys' ? 'active' : ''}`}
+            onClick={() => setGenderFilter('boys')}
           >
-            <X size={14} />
+            Boys Centers ({boysData.length || '-'})
+          </button>
+          <button
+            className={`segment-btn ${genderFilter === 'girls' ? 'active' : ''}`}
+            onClick={() => setGenderFilter('girls')}
+          >
+            Girls Centers ({girlsData.length || '-'})
           </button>
         </div>
 
-        {/* Suggestions Dropdown */}
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="suggestions-dropdown">
-            {suggestions.map((s, i) => (
-              <button
-                key={i}
-                className="suggestion-item"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setSearchQuery(s.label);
-                  setShowSuggestions(false);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  setSearchQuery(s.label);
-                  setShowSuggestions(false);
-                }}
-              >
-                <span className={`suggestion-icon ${s.type}`}>
-                  {s.type === 'district' ? '📍' : '🏫'}
-                </span>
-                <span className="suggestion-text">
-                  <span className="suggestion-label">{s.label}</span>
-                  {s.district && <span className="suggestion-sub">{s.district}</span>}
-                </span>
-              </button>
-            ))}
+        {/* Search */}
+        <div className="search-wrapper" ref={searchRef}>
+          <div className="search-input-container">
+            <Search className="search-icon" size={20} />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search center name or district..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+              onFocus={() => setShowSuggestions(true)}
+              autoComplete="off"
+            />
+            <button
+              className="clear-search"
+              onClick={() => { setSearchQuery(''); setShowSuggestions(false); }}
+              aria-label="Clear search"
+            >
+              <X size={14} />
+            </button>
           </div>
-        )}
-      </div>
 
-      {/* Content Area */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="suggestions-dropdown">
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  className="suggestion-item"
+                  onMouseDown={(e) => { e.preventDefault(); setSearchQuery(s.label); setShowSuggestions(false); }}
+                  onTouchEnd={(e) => { e.preventDefault(); setSearchQuery(s.label); setShowSuggestions(false); }}
+                >
+                  <span className="suggestion-icon">{s.type === 'district' ? '📍' : '🏫'}</span>
+                  <span className="suggestion-text">
+                    <span className="suggestion-label">{s.label}</span>
+                    {s.district && <span className="suggestion-sub">{s.district}</span>}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+
+  const MainContent = (
+    <main className="main-content">
       {loading ? (
         renderSkeletons()
       ) : errorMsg ? (
         <div className="empty-state">
-          <div className="empty-state-icon">
-            <X size={32} />
-          </div>
+          <div className="empty-state-icon"><X size={28} /></div>
           <h3>Oops!</h3>
           <p>{errorMsg}</p>
         </div>
@@ -266,58 +246,44 @@ function App() {
 
           {filteredCenters.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-icon">
-                <Building size={32} />
-              </div>
+              <div className="empty-state-icon"><Building size={28} /></div>
               <h3>No centers found</h3>
               <p>Try adjusting your search terms.</p>
             </div>
           ) : (
             <div className="centers-grid">
               {filteredCenters.map((center, index) => {
-                const showDistrictHeading = index === 0 || center.district !== filteredCenters[index - 1].district;
-
+                const showHeading = index === 0 || center.district !== filteredCenters[index - 1].district;
                 return (
                   <React.Fragment key={center.id}>
-                    {showDistrictHeading && (
-                      <h2 className="district-heading">{center.district}</h2>
-                    )}
-                    <div 
-                      className="center-card" 
-                      style={{ animationDelay: `${index * 0.03}s` }}
-                    >
+                    {showHeading && <h2 className="district-heading">{center.district}</h2>}
+                    <div className="center-card" style={{ animationDelay: `${index * 0.025}s` }}>
                       <div className="card-top">
                         <h3 className="center-title">{center.centerName}</h3>
                       </div>
-                      
                       <div className="card-body">
-                    <div className="info-row">
-                      <User className="info-icon" size={16} />
-                      <span className="info-text">
-                        <strong>Coordinator:</strong> {center.coordinator}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="card-footer">
-                    {center.phone ? (
-                      <a href={`tel:${center.phone.replace(/[^0-9+]/g, '')}`} className="action-btn btn-outline">
-                        <Phone size={18} />
-                        Call Desk
-                      </a>
-                    ) : (
-                      <div></div>
-                    )}
-                    <a 
-                      href={center.mapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(center.centerName + ' ' + center.district)}`}
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="action-btn btn-primary"
-                    >
-                      <Navigation size={18} />
-                      Navigate
-                    </a>
-                  </div>
+                        <div className="info-row">
+                          <User className="info-icon" size={16} />
+                          <span className="info-text">
+                            <strong>Coordinator:</strong> {center.coordinator}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="card-footer">
+                        {center.phone ? (
+                          <a href={`tel:${center.phone.replace(/[^0-9+]/g, '')}`} className="action-btn btn-outline">
+                            <Phone size={17} /> Call Desk
+                          </a>
+                        ) : <div></div>}
+                        <a
+                          href={center.mapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(center.centerName + ' ' + center.district)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="action-btn btn-primary"
+                        >
+                          <Navigation size={17} /> Navigate
+                        </a>
+                      </div>
                     </div>
                   </React.Fragment>
                 );
@@ -326,6 +292,15 @@ function App() {
           )}
         </>
       )}
+    </main>
+  );
+
+  return (
+    <div className="app-container">
+      <div className="desktop-layout">
+        {Sidebar}
+        {MainContent}
+      </div>
     </div>
   );
 }
