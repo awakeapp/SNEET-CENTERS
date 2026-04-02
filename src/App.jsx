@@ -14,6 +14,8 @@ function App() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [isPinSearching, setIsPinSearching] = useState(false);
+  const [userCoords, setUserCoords] = useState(null);
+  const [centerCoords, setCenterCoords] = useState({});
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -68,9 +70,10 @@ function App() {
       setLoading(true);
       try {
         const cacheBust = `&t=${Date.now()}`;
-        const [boysRes, girlsRes] = await Promise.all([
+        const [boysRes, girlsRes, coordsRes] = await Promise.all([
           fetch(BOYS_CSV_URL + cacheBust, { cache: 'no-store' }),
           fetch(GIRLS_CSV_URL + cacheBust, { cache: 'no-store' }),
+          fetch('/data/center_coords.json').then(r => r.json()).catch(() => ({}))
         ]);
         const boysText = await boysRes.text();
         const girlsText = await girlsRes.text();
@@ -80,8 +83,9 @@ function App() {
         ]);
         setBoysData(boysJson);
         setGirlsData(girlsJson);
+        setCenterCoords(coordsRes);
       } catch (err) {
-        console.error('Error loading CSV:', err);
+        console.error('Error loading data:', err);
         setErrorMsg('Failed to load data. Please check connection.');
       } finally {
         setLoading(false);
@@ -119,13 +123,42 @@ function App() {
     };
   }, []);
 
+  const getDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  };
+
   const filteredCenters = useMemo(() => {
+    let data = activeData.map(c => {
+      // Fallback to district level coordinates for reliability
+      const coords = centerCoords.DISTRICT_COORDS ? centerCoords.DISTRICT_COORDS[c.district.toUpperCase().trim()] : null;
+      if (userCoords && coords) {
+        return { ...c, distance: getDistance(userCoords.lat, userCoords.lon, coords.lat, coords.lon) };
+      }
+      return { ...c, distance: null };
+    });
+
+    if (userCoords) {
+      // Sort the global list by KM distance
+      return [...data].sort((a, b) => {
+        if (a.distance === null) return 1;
+        if (b.distance === null) return -1;
+        return a.distance - b.distance;
+      });
+    }
+
     const query = searchQuery.toLowerCase().trim();
-    if (!query) return activeData;
-    return activeData.filter(
+    if (!query) return data;
+    return data.filter(
       c => c.centerName.toLowerCase().includes(query) || c.district.toLowerCase().includes(query)
     );
-  }, [searchQuery, activeData]);
+  }, [searchQuery, activeData, userCoords, centerCoords]);
 
   const handlePinSubmit = async (e) => {
     e.preventDefault();
@@ -133,32 +166,23 @@ function App() {
 
     setIsPinSearching(true);
     try {
-      // Use Indian Post Office API
-      const res = await fetch(`https://api.postalpincode.in/pincode/${pinInput.trim()}`);
+      // Use Zippopotam API for Latitude/Longitude
+      const res = await fetch(`https://api.zippopotam.us/IN/${pinInput.trim()}`);
+      if (!res.ok) throw new Error("Invalid PIN");
+      
       const data = await res.json();
-
-      if (data[0].Status === "Success" && data[0].PostOffice) {
-        const district = data[0].PostOffice[0].District;
-        
-        // Auto-Switch logic: Check if girls data has more results for this district
-        const boysRes = boysData.filter(c => c.district.toLowerCase().includes(district.toLowerCase())).length;
-        const girlsRes = girlsData.filter(c => c.district.toLowerCase().includes(district.toLowerCase())).length;
-
-        if (girlsRes > boysRes && genderFilter === 'boys') {
-          setGenderFilter('girls');
-        } else if (boysRes > girlsRes && genderFilter === 'girls') {
-          setGenderFilter('boys');
-        }
-
-        setSearchQuery(district);
+      if (data.places && data.places[0]) {
+        const place = data.places[0];
+        setUserCoords({ lat: parseFloat(place.latitude), lon: parseFloat(place.longitude) });
+        setSearchQuery(''); // Clear manual search when nearest is active
         setShowPinModal(false);
         setPinInput('');
       } else {
-        alert("PIN Code not found or not supported. Try searching by Name.");
+        alert("PIN Code not found. Try searching by Name.");
       }
     } catch (err) {
       console.error(err);
-      alert("Error finding location. Please check your connection.");
+      alert("PIN Code not found or not supported. Try using a main City/District search.");
     } finally {
       setIsPinSearching(false);
     }
@@ -321,8 +345,13 @@ function App() {
         <>
           <div className="meta-info">
             <span className="result-count">
-              {filteredCenters.length} {filteredCenters.length === 1 ? 'Result' : 'Results'}
+              {userCoords ? "Nearest Results (by Distance)" : `${filteredCenters.length} ${filteredCenters.length === 1 ? 'Center' : 'Centers'} Found`}
             </span>
+            {userCoords && (
+              <button className="clear-nearest" onClick={() => setUserCoords(null)}>
+                <X size={14} /> Clear Nearest
+              </button>
+            )}
           </div>
 
           {filteredCenters.length === 0 ? (
@@ -337,14 +366,15 @@ function App() {
                 const showHeading = index === 0 || center.district !== filteredCenters[index - 1].district;
                 return (
                   <React.Fragment key={center.id}>
-                    {showHeading && (
-                      <h2 className="district-heading">
-                        <Map size={14} strokeWidth={2.5} /> {center.district}
-                      </h2>
-                    )}
+                    {showHeading && !userCoords && <h2 className="district-heading"><Map size={14} strokeWidth={2.5} /> {center.district}</h2>}
                     <div className="center-card" style={{ animationDelay: `${index * 0.025}s` }}>
                       <div className="card-top">
                         <h3 className="center-title">{center.centerName}</h3>
+                        {center.distance !== null && (
+                          <div className="distance-badge">
+                            {center.distance} KM AWAY
+                          </div>
+                        )}
                       </div>
                       <div className="card-body">
                         <div className="info-row">

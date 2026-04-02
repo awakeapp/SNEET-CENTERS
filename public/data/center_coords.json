@@ -1,0 +1,32 @@
+{
+  "DISTRICT_COORDS": {
+    "KASARAGODE": {"lat": 12.5103, "lon": 74.9852},
+    "KANNUR": {"lat": 11.8745, "lon": 75.3704},
+    "KOZHIKODE": {"lat": 11.2588, "lon": 75.7804},
+    "MALAPPURAM": {"lat": 11.0735, "lon": 76.0740},
+    "PALAKKAD": {"lat": 10.7867, "lon": 76.6547},
+    "TRISSUR": {"lat": 10.5276, "lon": 76.2144},
+    "THRISSUR": {"lat": 10.5276, "lon": 76.2144},
+    "ERNAKULAM": {"lat": 9.9816, "lon": 76.2999},
+    "IDUKKY": {"lat": 9.9189, "lon": 77.1025},
+    "IDUKKI": {"lat": 9.9189, "lon": 77.1025},
+    "KOTTAYAM": {"lat": 9.5916, "lon": 76.5221},
+    "ALAPPEY": {"lat": 9.4981, "lon": 76.3388},
+    "ALAPPUZHA": {"lat": 9.4981, "lon": 76.3388},
+    "PATHANAMTHITTA": {"lat": 9.2648, "lon": 76.7870},
+    "QUILON": {"lat": 8.8932, "lon": 76.6141},
+    "KOLLAM": {"lat": 8.8932, "lon": 76.6141},
+    "TRIVANDRUM": {"lat": 8.5241, "lon": 76.9366},
+    "THIRUVANANTHAPURAM": {"lat": 8.5241, "lon": 76.9366},
+    "KANYAKUMARI": {"lat": 8.0883, "lon": 77.5385},
+    "LAKSHADWEEP": {"lat": 10.5667, "72.6417": 72.6417},
+    "KSA": {"lat": 24.7136, "lon": 46.6753},
+    "UAE": {"lat": 25.2048, "lon": 55.2708},
+    "UAE-DXB": {"lat": 25.2048, "lon": 55.2708},
+    "UAE-AUH": {"lat": 24.4539, "lon": 54.3773},
+    "OMAN": {"lat": 23.5859, "lon": 58.4059},
+    "QATAR": {"lat": 25.2854, "lon": 51.5310},
+    "BAHRAIN": {"lat": 26.2285, "lon": 50.5860},
+    "KUWAIT": {"lat": 29.3759, "lon": 47.9774}
+  }
+}

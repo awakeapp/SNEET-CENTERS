@@ -608,3 +608,46 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
     margin-top: 1.5rem;
   }
 }
+
+/* ─── DISTANCE BADGE ─── */
+.distance-badge {
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.clear-nearest {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #EEF1F5;
+  color: var(--text-2);
+  border: none;
+  padding: 0.4rem 0.75rem;
+  border-radius: 100px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-nearest:hover {
+  background: #E2E6EC;
+  color: var(--primary);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.center-title {
+  flex: 1;
+}
