@@ -34,12 +34,18 @@ function App() {
 
             const phoneMatch = coordText.match(/[\d+\-\s]{10,15}/);
             const extractedPhone = phoneMatch ? phoneMatch[0].trim() : '';
+            
+            let coordNameOnly = coordText;
+            if (extractedPhone) {
+              // Strip the phone number and trailing/leading punctuation
+              coordNameOnly = coordText.replace(extractedPhone, '').replace(/[,\-():]+/g, ' ').replace(/\s\s+/g, ' ').trim();
+            }
 
             return {
               id: index,
               district: currentDistrict,
               centerName: centerName,
-              coordinator: coordText,
+              coordinator: coordNameOnly || 'Help Desk',
               phone: extractedPhone,
               mapLink: mapLink
             };
