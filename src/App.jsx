@@ -12,8 +12,10 @@ function App() {
   const [girlsData, setGirlsData] = useState([]);
   
   const [searchQuery, setSearchQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+  const searchRef = React.useRef(null);
 
   const parseCsvData = (csvText) => {
     return new Promise((resolve, reject) => {
@@ -92,6 +94,38 @@ function App() {
 
   const activeData = genderFilter === 'boys' ? boysData : girlsData;
 
+  // Build unique suggestions: distinct district names + center names
+  const suggestions = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase().trim();
+
+    const districtMatches = [...new Set(activeData.map(c => c.district))]
+      .filter(d => d.toLowerCase().includes(query))
+      .map(d => ({ type: 'district', label: d }));
+
+    const centerMatches = activeData
+      .filter(c => c.centerName.toLowerCase().includes(query))
+      .slice(0, 6)
+      .map(c => ({ type: 'center', label: c.centerName, district: c.district }));
+
+    return [...districtMatches.slice(0, 3), ...centerMatches].slice(0, 8);
+  }, [searchQuery, activeData]);
+
+  // Close suggestions when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
   const filteredCenters = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return activeData;
@@ -159,7 +193,7 @@ function App() {
       </div>
 
       {/* Search Bar */}
-      <div className="search-wrapper">
+      <div className="search-wrapper" ref={searchRef}>
         <div className="search-input-container">
           <Search className="search-icon" size={20} />
           <input 
@@ -167,16 +201,48 @@ function App() {
             className="search-input"
             placeholder="Search center name or district..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+            onFocus={() => setShowSuggestions(true)}
+            autoComplete="off"
           />
           <button 
             className="clear-search" 
-            onClick={() => setSearchQuery('')}
+            onClick={() => { setSearchQuery(''); setShowSuggestions(false); }}
             aria-label="Clear search"
           >
             <X size={14} />
           </button>
         </div>
+
+        {/* Suggestions Dropdown */}
+        {showSuggestions && suggestions.length > 0 && (
+          <div className="suggestions-dropdown">
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                className="suggestion-item"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setSearchQuery(s.label);
+                  setShowSuggestions(false);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  setSearchQuery(s.label);
+                  setShowSuggestions(false);
+                }}
+              >
+                <span className={`suggestion-icon ${s.type}`}>
+                  {s.type === 'district' ? '📍' : '🏫'}
+                </span>
+                <span className="suggestion-text">
+                  <span className="suggestion-label">{s.label}</span>
+                  {s.district && <span className="suggestion-sub">{s.district}</span>}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Content Area */}
