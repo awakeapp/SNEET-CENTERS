@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MapPin, Phone, Building, Navigation, User, Map } from 'lucide-react';
+import { Search, MapPin, Phone, Building, Navigation, User, X } from 'lucide-react';
 import Papa from 'papaparse';
 import './index.css';
 
-// We implement fetching in a robust way using the explicit CSV output and gid targeting
 const BOYS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vReXaCcSjfY47O5-qzYTNZdQKS7DLgj8iZMGW5g40mkKvRBKlj1FZ3B20KOE9rgpbxMp8Sma4Lsl9BT/pub?gid=0&single=true&output=csv";
 const GIRLS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vReXaCcSjfY47O5-qzYTNZdQKS7DLgj8iZMGW5g40mkKvRBKlj1FZ3B20KOE9rgpbxMp8Sma4Lsl9BT/pub?gid=1887904745&single=true&output=csv";
 
@@ -44,8 +43,10 @@ function App() {
               phone: extractedPhone,
               mapLink: mapLink
             };
-          }).filter(c => c.centerName !== ''); // remove invalid lines
+          }).filter(c => c.centerName !== '');
           
+          // Sort alphabetically by district
+          formatted.sort((a, b) => a.district.localeCompare(b.district));
           resolve(formatted);
         },
         error: (err) => reject(err)
@@ -57,20 +58,21 @@ function App() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch boys
-        const boysRes = await fetch(BOYS_CSV_URL);
-        const boysText = await boysRes.text();
-        const boysJson = await parseCsvData(boysText);
-        setBoysData(boysJson);
+        const [boysRes, girlsRes] = await Promise.all([
+          fetch(BOYS_CSV_URL),
+          fetch(GIRLS_CSV_URL)
+        ]);
 
-        // Fetch girls if url exists
-        if (GIRLS_CSV_URL) {
-          const girlsRes = await fetch(GIRLS_CSV_URL);
-          const girlsText = await girlsRes.text();
-          const girlsJson = await parseCsvData(girlsText);
-          setGirlsData(girlsJson);
-        }
-        
+        const boysText = await boysRes.text();
+        const girlsText = await girlsRes.text();
+
+        const [boysJson, girlsJson] = await Promise.all([
+          parseCsvData(boysText),
+          parseCsvData(girlsText)
+        ]);
+
+        setBoysData(boysJson);
+        setGirlsData(girlsJson);
       } catch (err) {
         console.error("Error loading CSV:", err);
         setErrorMsg("Failed to load data. Please check connection.");
@@ -94,105 +96,135 @@ function App() {
     );
   }, [searchQuery, activeData]);
 
+  // Loading Skeleton Component
+  const renderSkeletons = () => (
+    <div className="centers-grid">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="skeleton-card">
+          <div className="sk-tag skeleton"></div>
+          <div className="sk-title skeleton"></div>
+          <div className="sk-text skeleton"></div>
+          <div className="sk-text short skeleton"></div>
+          <div className="sk-btns">
+            <div className="sk-btn skeleton"></div>
+            <div className="sk-btn skeleton"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="app-container">
       {/* Header */}
       <header className="header">
-        <h1>
-          <MapPin size={24} />
-          Exam Center Locator
-        </h1>
+        <div className="header-icon-wrapper">
+          <MapPin size={28} strokeWidth={2.5} />
+        </div>
+        <h1>SNEET Exam Centers</h1>
         <p>Find your admission test center details instantly.</p>
       </header>
 
-      {/* Gender Toggle */}
-      <div className="gender-toggle">
+      {/* Segmented Control */}
+      <div className="segmented-control">
         <button 
-          className={`toggle-btn ${genderFilter === 'boys' ? 'active' : ''}`}
+          className={`segment-btn ${genderFilter === 'boys' ? 'active' : ''}`}
           onClick={() => setGenderFilter('boys')}
         >
-          Boys Centers ({boysData.length})
+          Boys Centers ({boysData.length || '-'})
         </button>
         <button 
-          className={`toggle-btn ${genderFilter === 'girls' ? 'active' : ''}`}
+          className={`segment-btn ${genderFilter === 'girls' ? 'active' : ''}`}
           onClick={() => setGenderFilter('girls')}
         >
-          Girls Centers {GIRLS_CSV_URL ? `(${girlsData.length})` : '(Need Link)'}
+          Girls Centers ({girlsData.length || '-'})
         </button>
       </div>
 
       {/* Search Bar */}
-      <div className="search-container">
-        <Search className="search-icon" />
-        <input 
-          type="text" 
-          className="search-input"
-          placeholder="Search by center name or district..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
+      <div className="search-wrapper">
+        <div className="search-input-container">
+          <Search className="search-icon" size={20} />
+          <input 
+            type="text" 
+            className="search-input"
+            placeholder="Search center name or district..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <button 
+            className="clear-search" 
+            onClick={() => setSearchQuery('')}
+            aria-label="Clear search"
+          >
+            <X size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Content Area */}
       {loading ? (
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Loading centers data from Google Sheets...</p>
-        </div>
+        renderSkeletons()
       ) : errorMsg ? (
         <div className="empty-state">
+          <div className="empty-state-icon">
+            <X size={32} />
+          </div>
           <h3>Oops!</h3>
           <p>{errorMsg}</p>
         </div>
       ) : (
         <>
-          <div className="filter-summary">
-            Showing {filteredCenters.length} {filteredCenters.length === 1 ? 'center' : 'centers'}
-            {searchQuery && ` for "${searchQuery}"`}
+          <div className="meta-info">
+            <span className="result-count">
+              {filteredCenters.length} {filteredCenters.length === 1 ? 'Result' : 'Results'}
+            </span>
           </div>
 
           {filteredCenters.length === 0 ? (
             <div className="empty-state">
-              <Building className="empty-icon" />
+              <div className="empty-state-icon">
+                <Building size={32} />
+              </div>
               <h3>No centers found</h3>
-              {genderFilter === 'girls' && !GIRLS_CSV_URL ? (
-                <p>Waiting for the Girls Sheet CSV Link from Administrator.</p>
-              ) : (
-                <p>Try adjusting your search terms.</p>
-              )}
+              <p>Try adjusting your search terms.</p>
             </div>
           ) : (
-            <div className="centers-list">
+            <div className="centers-grid">
               {filteredCenters.map((center, index) => (
                 <div 
                   className="center-card" 
                   key={center.id}
                   style={{ animationDelay: `${index * 0.03}s` }}
                 >
-                  <div className="card-header">
-                    <h3 className="center-name">{center.centerName}</h3>
-                    <span className="district-badge">{center.district}</span>
+                  <div className="card-top">
+                    <h3 className="center-title">{center.centerName}</h3>
+                    <span className="district-tag">{center.district}</span>
                   </div>
                   
-                  <div className="card-details">
-                    <div className="detail-row">
-                      <User className="detail-icon" />
-                      <span><strong>Coordinator:</strong> {center.coordinator}</span>
+                  <div className="card-body">
+                    <div className="info-row">
+                      <User className="info-icon" size={16} />
+                      <span className="info-text">
+                        <strong>Coordinator:</strong> {center.coordinator}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="card-actions">
-                    {center.phone && (
-                      <a href={`tel:${center.phone.replace(/[^0-9+]/g, '')}`} className="btn btn-secondary">
+                  <div className="card-footer">
+                    {center.phone ? (
+                      <a href={`tel:${center.phone.replace(/[^0-9+]/g, '')}`} className="action-btn btn-outline">
                         <Phone size={18} />
-                        Call
+                        Call Desk
                       </a>
+                    ) : (
+                      <div></div>
                     )}
                     <a 
                       href={center.mapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(center.centerName + ' ' + center.district)}`}
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="btn btn-primary"
+                      className="action-btn btn-primary"
                     >
                       <Navigation size={18} />
                       Navigate
