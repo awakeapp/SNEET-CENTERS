@@ -448,7 +448,7 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   /* ── Card grid: 2 columns on desktop ── */
   .centers-grid {
     display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1.1rem;
     align-items: start;
   }
@@ -474,6 +474,6 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 @media (min-width: 1400px) {
   :root { --sidebar-w: 400px; }
   .centers-grid {
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
   }
 }
