@@ -3,9 +3,9 @@ import { Search, MapPin, Phone, Building, Navigation, User, Map } from 'lucide-r
 import Papa from 'papaparse';
 import './index.css';
 
-// We implement fetching in a robust way
-const BOYS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vReXaCcSjfY47O5-qzYTNZdQKS7DLgj8iZMGW5g40mkKvRBKlj1FZ3B20KOE9rgpbxMp8Sma4Lsl9BT/pub?output=csv";
-const GIRLS_CSV_URL = null; // We need user to provide this
+// We implement fetching in a robust way using the explicit CSV output and gid targeting
+const BOYS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vReXaCcSjfY47O5-qzYTNZdQKS7DLgj8iZMGW5g40mkKvRBKlj1FZ3B20KOE9rgpbxMp8Sma4Lsl9BT/pub?gid=0&single=true&output=csv";
+const GIRLS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vReXaCcSjfY47O5-qzYTNZdQKS7DLgj8iZMGW5g40mkKvRBKlj1FZ3B20KOE9rgpbxMp8Sma4Lsl9BT/pub?gid=1887904745&single=true&output=csv";
 
 function App() {
   const [genderFilter, setGenderFilter] = useState('boys');
