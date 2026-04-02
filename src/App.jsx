@@ -24,7 +24,7 @@ function App() {
   const searchRef = React.useRef(null);
 
   // 💎 PASTE YOUR GOOGLE API KEY HERE (OPTIONAL)
-  const GOOGLE_MAPS_API_KEY = ""; 
+  const GOOGLE_MAPS_API_KEY = "AIzaSyCQSfsKGe0YuCyRMp5qqNJeWypcyHYuhZc"; 
 
   const parseCsvData = (csvText) => {
     return new Promise((resolve, reject) => {
