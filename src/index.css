@@ -238,7 +238,7 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   display: flex; 
   align-items: center; 
   gap: 0.75rem;
-  margin: 2.5rem 0 1rem;
+  margin: 1.5rem 0 1rem;
   grid-column: 1 / -1;
 }
 
@@ -446,16 +446,8 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
     margin: 2rem 0 0.6rem;
   }
 
-  .district-heading:first-child { margin-top: 0; }
-
-  /* ── Better hover on desktop ── */
-  .center-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-lg);
-  }
-
   /* ── Meta info ── */
-  .meta-info { margin-bottom: 1.25rem; padding: 0; }
+  .meta-info { margin-bottom: 0.5rem; padding: 0; }
 }
 
 /* ── 3-col on very wide screens ── */
