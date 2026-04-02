@@ -160,6 +160,17 @@ function App() {
     );
   }, [searchQuery, activeData, userCoords, routeData]);
 
+  const calculateHaversine = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
   const handlePinSubmit = async (e) => {
     e.preventDefault();
     const pin = pinInput.trim();
@@ -184,7 +195,6 @@ function App() {
       }
 
       if (!targetCoords) {
-        // Fallback to Zippopotam
         const res = await fetch(`https://api.zippopotam.us/IN/${pin}`);
         if (res.ok) {
           const data = await res.json();
@@ -196,7 +206,6 @@ function App() {
       }
 
       if (!targetCoords) {
-        // Fallback to Postal PIN Code API
         const res2 = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
         const data2 = await res2.json();
         if (data2[0]?.Status === "Success" && data2[0].PostOffice) {
@@ -220,30 +229,40 @@ function App() {
       setUserCoords(targetCoords);
       setOriginAddress(finalAddress || `PIN ${pin}`);
       
-      // 2. Fetch ROAD ROUTES for all centers
-      const centersToProcess = activeData.map(c => {
+      // 2. Efficient Road Route Fetching
+      // First, find the top 25 candidates using simple straight-line distance (Haversine)
+      const candidates = activeData.map(c => {
         let cCoords = centerCoords.INDIVIDUAL_CENTERS?.[c.centerName.toUpperCase().trim()];
         if (!cCoords) cCoords = centerCoords.DISTRICT_COORDS?.[c.district.toUpperCase().trim()];
-        return { id: c.id, coords: cCoords, district: c.district };
-      }).filter(c => c.coords).slice(0, 25);
+        if (!cCoords) return null;
+        const straightDist = calculateHaversine(targetCoords.lat, targetCoords.lon, cCoords.lat, cCoords.lon);
+        return { ...c, coords: cCoords, straightDist };
+      })
+      .filter(c => c !== null)
+      .sort((a, b) => a.straightDist - b.straightDist)
+      .slice(0, 25);
 
-      if (centersToProcess.length > 0) {
+      if (candidates.length > 0) {
         if (GOOGLE_MAPS_API_KEY) {
-          // Use Google Distance Matrix (Professional-grade, Traffic aware)
           try {
-            const dests = centersToProcess.map(c => `${c.coords.lat},${c.coords.lon}`).join('|');
-            const res = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${targetCoords.lat},${targetCoords.lon}&destinations=${encodeURIComponent(dests)}&key=${GOOGLE_MAPS_API_KEY}`);
+            const dests = candidates.map(c => `${c.coords.lat},${c.coords.lon}`).join('|');
+            // Added departure_time=now for duration_in_traffic
+            const res = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${targetCoords.lat},${targetCoords.lon}&destinations=${encodeURIComponent(dests)}&departure_time=now&key=${GOOGLE_MAPS_API_KEY}`);
             const data = await res.json();
             
             if (data.status === "OK" && data.rows[0]) {
               const newRouteData = {};
               data.rows[0].elements.forEach((el, idx) => {
                 if (el.status === "OK") {
-                  const center = centersToProcess[idx];
+                  const center = candidates[idx];
+                  // Use duration_in_traffic if available, else regular duration
+                  const bestTime = el.duration_in_traffic ? el.duration_in_traffic.value : el.duration.value;
+                  const isTraffic = !!el.duration_in_traffic;
+                  
                   newRouteData[center.id] = {
                     distance: Math.round(el.distance.value / 1000),
-                    time: el.duration.value,
-                    via: el.duration_in_traffic ? "Dynamic Traffic" : "Main Route"
+                    time: bestTime,
+                    via: isTraffic ? `via ${center.district} (with Live Traffic)` : `via ${center.district} Main Rd`
                   };
                 }
               });
@@ -251,8 +270,8 @@ function App() {
             }
           } catch (err) { console.error("Google Distance Matrix fail", err); }
         } else {
-          // Fallback to OSRM (Free, No traffic data)
-          const coordsQuery = [`${targetCoords.lon},${targetCoords.lat}`, ...centersToProcess.map(c => `${c.coords.lon},${c.coords.lat}`)].join(';');
+          // Fallback to OSRM (Free)
+          const coordsQuery = [`${targetCoords.lon},${targetCoords.lat}`, ...candidates.map(c => `${c.coords.lon},${c.coords.lat}`)].join(';');
           try {
             const r = await fetch(`https://router.project-osrm.org/table/v1/driving/${coordsQuery}?sources=0&annotations=distance,duration`);
             const rData = await r.json();
@@ -260,11 +279,11 @@ function App() {
               const newRouteData = {};
               rData.durations[0].forEach((duration, idx) => {
                 if (idx === 0) return;
-                const center = centersToProcess[idx - 1];
+                const center = candidates[idx - 1];
                 newRouteData[center.id] = {
                   distance: Math.round(rData.distances[0][idx] / 1000),
                   time: duration,
-                  via: `${center.district} Rd`
+                  via: `via ${center.district} Road`
                 };
               });
               setRouteData(newRouteData);
