@@ -185,37 +185,40 @@ function App() {
       const res2 = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
       const data2 = await res2.json();
       if (data2[0]?.Status === "Success" && data2[0].PostOffice) {
-        const districtName = data2[0].PostOffice[0].District;
-        const stateName = data2[0].PostOffice[0].State;
+        const districtName = data2[0].PostOffice[0].District || "";
+        const stateName = data2[0].PostOffice[0].State || "";
         
         // Check if we have this district pre-calculated
-        const preCalculated = centerCoords.DISTRICT_COORDS?.[districtName.toUpperCase()];
+        const preCalculated = centerCoords.DISTRICT_COORDS?.[districtName.toUpperCase().trim()];
         if (preCalculated) {
           setUserCoords(preCalculated);
         } else {
           // Step 3: UNIVERSAL FALLBACK - Geocode the District Name via Nominatim
-          const res3 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(districtName + ', ' + stateName + ', India')}&limit=1`, {
-            headers: { 'User-Agent': 'SNEET-Locator/1.0' }
-          });
-          const data3 = await res3.json();
-          if (data3?.[0]) {
-            setUserCoords({ lat: parseFloat(data3[0].lat), lon: parseFloat(data3[0].lon) });
-          } else {
-            alert(`Location found for ${districtName}, but distance calculation isn't ready. Showing all ${districtName} centers instead.`);
+          try {
+            const res3 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(districtName + ', ' + stateName + ', India')}&limit=1`, {
+              headers: { 'User-Agent': 'SNEET-Locator/1.0' }
+            });
+            const data3 = await res3.json();
+            if (data3?.[0]) {
+              setUserCoords({ lat: parseFloat(data3[0].lat), lon: parseFloat(data3[0].lon) });
+            } else {
+              setSearchQuery(districtName); // Fallback to name search if GPS fails
+            }
+          } catch (geocodeErr) {
+            console.error("Geocoding fallback failed:", geocodeErr);
             setSearchQuery(districtName);
           }
         }
         
-        setSearchQuery('');
-        setShowPinModal(false);
         setPinInput('');
+        setShowPinModal(false);
         return;
       }
 
-      alert("PIN Code not found. Please try searching by your District name directly.");
+      alert("PIN Code not found. Please try searching by your District or City name directly.");
     } catch (err) {
-      console.error(err);
-      alert("Error finding location. Please check your connection.");
+      console.error("PIN search failed:", err);
+      alert("Error finding location. Please try searching by name.");
     } finally {
       setIsPinSearching(false);
     }
