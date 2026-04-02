@@ -51,8 +51,7 @@ function App() {
             };
           }).filter(c => c.centerName !== '');
           
-          // Sort alphabetically by district
-          formatted.sort((a, b) => a.district.localeCompare(b.district));
+          // Preserve the original order from the Google Sheet
           resolve(formatted);
         },
         error: (err) => reject(err)
