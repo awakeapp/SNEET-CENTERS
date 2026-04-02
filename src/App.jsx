@@ -230,14 +230,6 @@ function App() {
 
   const MainContent = (
     <main className="main-content">
-      {/* Page Title for Desktop */}
-      <h1 className="desktop-page-title">
-        {genderFilter === 'boys' ? 'Boys' : 'Girls'} Exam Centers
-      </h1>
-      <p className="desktop-page-sub">
-        List of all centers available for {genderFilter === 'boys' ? 'boys' : 'girls'}.
-      </p>
-
       {loading ? (
         renderSkeletons()
       ) : errorMsg ? (

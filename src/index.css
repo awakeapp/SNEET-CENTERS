@@ -56,8 +56,6 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 
 .desktop-layout { display: contents; }
 
-.desktop-page-header { display: none; }
-
 /* ─── HEADER (mobile) ─── */
 .header { margin-bottom: 1.25rem; }
 
@@ -418,7 +416,7 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   .main-content {
     margin-left: var(--sidebar-w);
     min-height: 100vh;
-    padding: 2.5rem 2.5rem 4rem;
+    padding: 1.5rem 2rem 4rem;
   }
 
   /* ── HEADER adjustments ── */
@@ -434,23 +432,6 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 
   /* ── Segmented control ── */
   .segmented-control { margin-bottom: 0; }
-
-  /* ── Page title on desktop ── */
-  .desktop-page-header { display: block; margin-bottom: 2rem; }
-  
-  .desktop-page-title {
-    display: block;
-    font-size: 1.6rem; font-weight: 800;
-    color: var(--text-1);
-    margin-bottom: 0.35rem;
-    letter-spacing: -0.02em;
-  }
-
-  .desktop-page-sub {
-    display: block;
-    font-size: 0.9rem; color: var(--text-2);
-    margin-bottom: 2rem;
-  }
 
   /* ── Card grid: 2 columns on desktop ── */
   .centers-grid {
