@@ -395,6 +395,12 @@ function App() {
                       </div>
                       <div className="card-body">
                         <div className="info-row">
+                          <MapPin className="info-icon" size={16} />
+                          <span className="info-text">
+                            <strong>District:</strong> {center.district}
+                          </span>
+                        </div>
+                        <div className="info-row">
                           <User className="info-icon" size={16} />
                           <span className="info-text">
                             <strong>Coordinator:</strong> {center.coordinator}
