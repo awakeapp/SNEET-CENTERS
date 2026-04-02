@@ -651,3 +651,55 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 .center-title {
   flex: 1;
 }
+
+/* ─── ROUTE & TIME BADGES ─── */
+.card-top-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.time-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+.route-info-box {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  background: #F8FAFC;
+  border-radius: var(--r-md);
+  margin-bottom: 1.1rem;
+  border-left: 3px solid var(--primary);
+  animation: slideInFast 0.3s ease-out;
+}
+
+@keyframes slideInFast {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.route-icon {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.route-text {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.route-text strong {
+  color: var(--text-1);
+}
+
+/* Adjust distance badge slightly for this new layout */
+.distance-badge {
+  box-shadow: 0 1px 2px rgba(229,62,53,0.15);
+}

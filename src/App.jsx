@@ -15,6 +15,7 @@ function App() {
   const [pinInput, setPinInput] = useState('');
   const [isPinSearching, setIsPinSearching] = useState(false);
   const [userCoords, setUserCoords] = useState(null);
+  const [originAddress, setOriginAddress] = useState('');
   const [centerCoords, setCenterCoords] = useState({});
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -134,6 +135,15 @@ function App() {
     return Math.round(R * c);
   };
 
+  const getTravelTime = (km) => {
+    // Assuming 50km/hr average speed
+    const totalMinutes = Math.round((km / 50) * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    if (hours === 0) return `${mins} mins`;
+    return `${hours} hr ${mins} mins`;
+  };
+
   const filteredCenters = useMemo(() => {
     let data = activeData.map(c => {
       // Fallback to district level coordinates for reliability
@@ -192,6 +202,7 @@ function App() {
         const preCalculated = centerCoords.DISTRICT_COORDS?.[districtName.toUpperCase().trim()];
         if (preCalculated) {
           setUserCoords(preCalculated);
+          setOriginAddress(`${districtName}, ${stateName}`);
         } else {
           // Step 3: UNIVERSAL FALLBACK - Geocode the District Name via Nominatim
           try {
@@ -201,6 +212,7 @@ function App() {
             const data3 = await res3.json();
             if (data3?.[0]) {
               setUserCoords({ lat: parseFloat(data3[0].lat), lon: parseFloat(data3[0].lon) });
+              setOriginAddress(`${districtName}, ${stateName}`);
             } else {
               setSearchQuery(districtName); // Fallback to name search if GPS fails
             }
@@ -407,11 +419,19 @@ function App() {
                       <div className="card-top">
                         <h3 className="center-title">{center.centerName}</h3>
                         {center.distance !== null && (
-                          <div className="distance-badge">
-                            {center.distance} KM AWAY
+                          <div className="card-top-right">
+                            <div className="distance-badge">{center.distance} KM</div>
+                            <div className="time-badge">~{getTravelTime(center.distance)}</div>
                           </div>
                         )}
                       </div>
+                      
+                      {userCoords && (
+                        <div className="route-info-box">
+                          <Navigation size={14} className="route-icon" strokeWidth={3} />
+                          <span className="route-text">Available Route from <strong>{originAddress}</strong></span>
+                        </div>
+                      )}
                       <div className="card-body">
                         <div className="info-row">
                           <MapPin className="info-icon" size={16} />
@@ -433,12 +453,15 @@ function App() {
                           </a>
                         ) : <div></div>}
                         <a
-                          href={center.mapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(center.centerName + ' ' + center.district)}`}
+                          href={userCoords 
+                            ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originAddress)}&destination=${encodeURIComponent(center.centerName + ' ' + center.district)}`
+                            : (center.mapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(center.centerName + ' ' + center.district)}`)
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="action-btn btn-primary"
                         >
-                          <Navigation size={17} /> Navigate
+                          <Navigation size={17} /> {userCoords ? "Get Directions" : "Navigate"}
                         </a>
                       </div>
                     </div>
