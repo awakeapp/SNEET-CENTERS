@@ -167,20 +167,36 @@ function App() {
 
     setIsPinSearching(true);
     try {
-      // 1. Get Coordinates of the User's PIN
       let targetCoords = null;
       let finalAddress = "";
 
-      const res = await fetch(`https://api.zippopotam.us/IN/${pin}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.places?.[0]) {
-          targetCoords = { lat: parseFloat(data.places[0].latitude), lon: parseFloat(data.places[0].longitude) };
-          finalAddress = `${data.places[0]['place name']}, ${data.places[0].state}`;
+      // 1. Get Coordinates using Google Geocoding (Primary) or Free APIs (Fallback)
+      if (GOOGLE_MAPS_API_KEY) {
+        try {
+          const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${pin}&region=IN&key=${GOOGLE_MAPS_API_KEY}`);
+          const data = await res.json();
+          if (data.status === "OK" && data.results[0]) {
+            const loc = data.results[0].geometry.location;
+            targetCoords = { lat: loc.lat, lon: loc.lng };
+            finalAddress = data.results[0].formatted_address;
+          }
+        } catch (err) { console.error("Google Geocode fail", err); }
+      }
+
+      if (!targetCoords) {
+        // Fallback to Zippopotam
+        const res = await fetch(`https://api.zippopotam.us/IN/${pin}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.places?.[0]) {
+            targetCoords = { lat: parseFloat(data.places[0].latitude), lon: parseFloat(data.places[0].longitude) };
+            finalAddress = `${data.places[0]['place name']}, ${data.places[0].state}`;
+          }
         }
       }
 
       if (!targetCoords) {
+        // Fallback to Postal PIN Code API
         const res2 = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
         const data2 = await res2.json();
         if (data2[0]?.Status === "Success" && data2[0].PostOffice) {
@@ -204,38 +220,57 @@ function App() {
       setUserCoords(targetCoords);
       setOriginAddress(finalAddress || `PIN ${pin}`);
       
-      // 2. Fetch ROAD ROUTES for all centers (OSRM Table API - Instant & Batch)
+      // 2. Fetch ROAD ROUTES for all centers
       const centersToProcess = activeData.map(c => {
         let cCoords = centerCoords.INDIVIDUAL_CENTERS?.[c.centerName.toUpperCase().trim()];
         if (!cCoords) cCoords = centerCoords.DISTRICT_COORDS?.[c.district.toUpperCase().trim()];
         return { id: c.id, coords: cCoords, district: c.district };
-      }).filter(c => c.coords).slice(0, 25); // Process top 25 in one go
+      }).filter(c => c.coords).slice(0, 25);
 
       if (centersToProcess.length > 0) {
-        const coordsQuery = [
-          `${targetCoords.lon},${targetCoords.lat}`,
-          ...centersToProcess.map(c => `${c.coords.lon},${c.coords.lat}`)
-        ].join(';');
-
-        try {
-          // One single request for ALL distances/durations
-          const r = await fetch(`https://router.project-osrm.org/table/v1/driving/${coordsQuery}?sources=0&annotations=distance,duration`);
-          const rData = await r.json();
-          
-          if (rData.durations?.[0]) {
-            const newRouteData = {};
-            rData.durations[0].forEach((duration, idx) => {
-              if (idx === 0) return; // Skip self-distance
-              const center = centersToProcess[idx - 1];
-              newRouteData[center.id] = {
-                distance: Math.round(rData.distances[0][idx] / 1000), // KM
-                time: duration, // Seconds
-                via: `${center.district} Rd`
-              };
-            });
-            setRouteData(newRouteData);
-          }
-        } catch (err) { console.error("Batch Route fail", err); }
+        if (GOOGLE_MAPS_API_KEY) {
+          // Use Google Distance Matrix (Professional-grade, Traffic aware)
+          try {
+            const dests = centersToProcess.map(c => `${c.coords.lat},${c.coords.lon}`).join('|');
+            const res = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${targetCoords.lat},${targetCoords.lon}&destinations=${encodeURIComponent(dests)}&key=${GOOGLE_MAPS_API_KEY}`);
+            const data = await res.json();
+            
+            if (data.status === "OK" && data.rows[0]) {
+              const newRouteData = {};
+              data.rows[0].elements.forEach((el, idx) => {
+                if (el.status === "OK") {
+                  const center = centersToProcess[idx];
+                  newRouteData[center.id] = {
+                    distance: Math.round(el.distance.value / 1000),
+                    time: el.duration.value,
+                    via: el.duration_in_traffic ? "Dynamic Traffic" : "Main Route"
+                  };
+                }
+              });
+              setRouteData(newRouteData);
+            }
+          } catch (err) { console.error("Google Distance Matrix fail", err); }
+        } else {
+          // Fallback to OSRM (Free, No traffic data)
+          const coordsQuery = [`${targetCoords.lon},${targetCoords.lat}`, ...centersToProcess.map(c => `${c.coords.lon},${c.coords.lat}`)].join(';');
+          try {
+            const r = await fetch(`https://router.project-osrm.org/table/v1/driving/${coordsQuery}?sources=0&annotations=distance,duration`);
+            const rData = await r.json();
+            if (rData.durations?.[0]) {
+              const newRouteData = {};
+              rData.durations[0].forEach((duration, idx) => {
+                if (idx === 0) return;
+                const center = centersToProcess[idx - 1];
+                newRouteData[center.id] = {
+                  distance: Math.round(rData.distances[0][idx] / 1000),
+                  time: duration,
+                  via: `${center.district} Rd`
+                };
+              });
+              setRouteData(newRouteData);
+            }
+          } catch (err) { console.error("Batch Route fail", err); }
+        }
       }
 
       setSearchQuery('');
