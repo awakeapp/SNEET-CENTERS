@@ -63,9 +63,10 @@ function App() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        const cacheBust = `&t=${Date.now()}`;
         const [boysRes, girlsRes] = await Promise.all([
-          fetch(BOYS_CSV_URL),
-          fetch(GIRLS_CSV_URL)
+          fetch(BOYS_CSV_URL + cacheBust, { cache: 'no-store' }),
+          fetch(GIRLS_CSV_URL + cacheBust, { cache: 'no-store' })
         ]);
 
         const boysText = await boysRes.text();
