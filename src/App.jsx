@@ -146,8 +146,14 @@ function App() {
 
   const filteredCenters = useMemo(() => {
     let data = activeData.map(c => {
-      // Fallback to district level coordinates for reliability
-      const coords = centerCoords.DISTRICT_COORDS ? centerCoords.DISTRICT_COORDS[c.district.toUpperCase().trim()] : null;
+      // Look for EXACT coordinate match for this center first
+      let coords = centerCoords.INDIVIDUAL_CENTERS ? centerCoords.INDIVIDUAL_CENTERS[c.centerName.toUpperCase().trim()] : null;
+      
+      // Fallback to district level coordinates if individual match not found
+      if (!coords) {
+        coords = centerCoords.DISTRICT_COORDS ? centerCoords.DISTRICT_COORDS[c.district.toUpperCase().trim()] : null;
+      }
+      
       if (userCoords && coords) {
         return { ...c, distance: getDistance(userCoords.lat, userCoords.lon, coords.lat, coords.lon) };
       }
