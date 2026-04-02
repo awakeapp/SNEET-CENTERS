@@ -17,10 +17,14 @@ function App() {
   const [userCoords, setUserCoords] = useState(null);
   const [originAddress, setOriginAddress] = useState('');
   const [centerCoords, setCenterCoords] = useState({});
+  const [routeData, setRouteData] = useState({}); // {centerId: {distance, time, via}}
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const searchRef = React.useRef(null);
+
+  // 💎 PASTE YOUR GOOGLE API KEY HERE (OPTIONAL)
+  const GOOGLE_MAPS_API_KEY = ""; 
 
   const parseCsvData = (csvText) => {
     return new Promise((resolve, reject) => {
@@ -124,48 +128,28 @@ function App() {
     };
   }, []);
 
-  const getDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return Math.round(R * c);
-  };
-
-  const getTravelTime = (km) => {
-    // Assuming 50km/hr average speed
-    const totalMinutes = Math.round((km / 50) * 60);
-    const hours = Math.floor(totalMinutes / 60);
-    const mins = totalMinutes % 60;
+  const formatTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     if (hours === 0) return `${mins} mins`;
     return `${hours} hr ${mins} mins`;
   };
 
   const filteredCenters = useMemo(() => {
     let data = activeData.map(c => {
-      // Look for EXACT coordinate match for this center first
-      let coords = centerCoords.INDIVIDUAL_CENTERS ? centerCoords.INDIVIDUAL_CENTERS[c.centerName.toUpperCase().trim()] : null;
-      
-      // Fallback to district level coordinates if individual match not found
-      if (!coords) {
-        coords = centerCoords.DISTRICT_COORDS ? centerCoords.DISTRICT_COORDS[c.district.toUpperCase().trim()] : null;
+      const roadInfo = routeData[c.id];
+      if (userCoords && roadInfo) {
+        return { ...c, roadDistance: roadInfo.distance, travelTime: roadInfo.time, via: roadInfo.via };
       }
-      
-      if (userCoords && coords) {
-        return { ...c, distance: getDistance(userCoords.lat, userCoords.lon, coords.lat, coords.lon) };
-      }
-      return { ...c, distance: null };
+      return { ...c, roadDistance: null, travelTime: null, via: null };
     });
 
     if (userCoords) {
-      // Sort the global list by KM distance
+      // Sort the global list by ACTUAL ROAD distance
       return [...data].sort((a, b) => {
-        if (a.distance === null) return 1;
-        if (b.distance === null) return -1;
-        return a.distance - b.distance;
+        if (a.roadDistance === null) return 1;
+        if (b.roadDistance === null) return -1;
+        return a.roadDistance - b.roadDistance;
       });
     }
 
@@ -174,7 +158,7 @@ function App() {
     return data.filter(
       c => c.centerName.toLowerCase().includes(query) || c.district.toLowerCase().includes(query)
     );
-  }, [searchQuery, activeData, userCoords, centerCoords]);
+  }, [searchQuery, activeData, userCoords, routeData]);
 
   const handlePinSubmit = async (e) => {
     e.preventDefault();
@@ -183,60 +167,75 @@ function App() {
 
     setIsPinSearching(true);
     try {
-      // Step 1: Try Zippopotam (Direct High-Accuracy GPS)
+      // 1. Get Coordinates of the User's PIN
+      let targetCoords = null;
+      let finalAddress = "";
+
       const res = await fetch(`https://api.zippopotam.us/IN/${pin}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.places && data.places[0]) {
-          const place = data.places[0];
-          setUserCoords({ lat: parseFloat(place.latitude), lon: parseFloat(place.longitude) });
-          setSearchQuery('');
-          setShowPinModal(false);
-          setPinInput('');
-          return;
+        if (data.places?.[0]) {
+          targetCoords = { lat: parseFloat(data.places[0].latitude), lon: parseFloat(data.places[0].longitude) };
+          finalAddress = `${data.places[0]['place name']}, ${data.places[0].state}`;
         }
       }
 
-      // Step 2: Fallback to Indian Post Office API (District Name)
-      const res2 = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
-      const data2 = await res2.json();
-      if (data2[0]?.Status === "Success" && data2[0].PostOffice) {
-        const districtName = data2[0].PostOffice[0].District || "";
-        const stateName = data2[0].PostOffice[0].State || "";
-        
-        // Check if we have this district pre-calculated
-        const preCalculated = centerCoords.DISTRICT_COORDS?.[districtName.toUpperCase().trim()];
-        if (preCalculated) {
-          setUserCoords(preCalculated);
-          setOriginAddress(`${districtName}, ${stateName}`);
-        } else {
-          // Step 3: UNIVERSAL FALLBACK - Geocode the District Name via Nominatim
-          try {
-            const res3 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(districtName + ', ' + stateName + ', India')}&limit=1`, {
+      if (!targetCoords) {
+        const res2 = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+        const data2 = await res2.json();
+        if (data2[0]?.Status === "Success" && data2[0].PostOffice) {
+          const district = data2[0].PostOffice[0].District;
+          const state = data2[0].PostOffice[0].State;
+          finalAddress = `${district}, ${state}`;
+          const pre = centerCoords.DISTRICT_COORDS?.[district.toUpperCase()];
+          if (pre) targetCoords = pre;
+          else {
+            const res3 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(district + ',' + state + ',India')}&limit=1`, {
               headers: { 'User-Agent': 'SNEET-Locator/1.0' }
             });
             const data3 = await res3.json();
-            if (data3?.[0]) {
-              setUserCoords({ lat: parseFloat(data3[0].lat), lon: parseFloat(data3[0].lon) });
-              setOriginAddress(`${districtName}, ${stateName}`);
-            } else {
-              setSearchQuery(districtName); // Fallback to name search if GPS fails
-            }
-          } catch (geocodeErr) {
-            console.error("Geocoding fallback failed:", geocodeErr);
-            setSearchQuery(districtName);
+            if (data3?.[0]) targetCoords = { lat: parseFloat(data3[0].lat), lon: parseFloat(data3[0].lon) };
           }
         }
-        
-        setPinInput('');
-        setShowPinModal(false);
-        return;
       }
 
-      alert("PIN Code not found. Please try searching by your District or City name directly.");
+      if (!targetCoords) throw new Error("Location not found");
+
+      setUserCoords(targetCoords);
+      setOriginAddress(finalAddress || `PIN ${pin}`);
+      
+      // 2. Fetch ROAD ROUTES for all centers (OSRM - Instant & Free)
+      const newRouteData = {};
+      const requests = activeData.map(async (c) => {
+        let cCoords = centerCoords.INDIVIDUAL_CENTERS?.[c.centerName.toUpperCase().trim()];
+        if (!cCoords) cCoords = centerCoords.DISTRICT_COORDS?.[c.district.toUpperCase().trim()];
+        
+        if (cCoords) {
+          try {
+            // OSRM provides ACTUAL road distance and duration
+            const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${targetCoords.lon},${targetCoords.lat};${cCoords.lon},${cCoords.lat}?overview=false`);
+            const rData = await r.json();
+            if (rData.routes?.[0]) {
+              const route = rData.routes[0];
+              newRouteData[c.id] = {
+                distance: Math.round(route.distance / 1000), // KM
+                time: route.duration, // Seconds
+                via: `${c.district} Rd` // Fallback via
+              };
+            }
+          } catch (err) { console.error("Route fail", err); }
+        }
+      });
+
+      await Promise.all(requests.slice(0, 15)); // Fetch top 15 for speed
+      setRouteData(newRouteData);
+      setSearchQuery('');
+      setShowPinModal(false);
+      setPinInput('');
+
     } catch (err) {
-      console.error("PIN search failed:", err);
-      alert("Error finding location. Please try searching by name.");
+      console.error(err);
+      alert("Location not found. Please try searching by name.");
     } finally {
       setIsPinSearching(false);
     }
@@ -424,10 +423,10 @@ function App() {
                     <div className="center-card" style={{ animationDelay: `${index * 0.025}s` }}>
                       <div className="card-top">
                         <h3 className="center-title">{center.centerName}</h3>
-                        {center.distance !== null && (
+                        {center.roadDistance !== null && (
                           <div className="card-top-right">
-                            <div className="distance-badge">{center.distance} KM</div>
-                            <div className="time-badge">~{getTravelTime(center.distance)}</div>
+                            <div className="distance-badge">{center.roadDistance} KM</div>
+                            <div className="time-badge">~{formatTime(center.travelTime)}</div>
                           </div>
                         )}
                       </div>
@@ -435,7 +434,7 @@ function App() {
                       {userCoords && (
                         <div className="route-info-box">
                           <Navigation size={14} className="route-icon" strokeWidth={3} />
-                          <span className="route-text">Available Route from <strong>{originAddress}</strong></span>
+                          <span className="route-text">Available via <strong>{center.via || "Main Highways"}</strong></span>
                         </div>
                       )}
                       <div className="card-body">
