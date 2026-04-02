@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MapPin, Phone, Building, Navigation, User, X, School } from 'lucide-react';
+import { Search, MapPin, Phone, Building, Navigation, User, X, School, Map } from 'lucide-react';
 import Papa from 'papaparse';
 import './index.css';
 
@@ -213,9 +213,7 @@ function App() {
                   onTouchEnd={(e) => { e.preventDefault(); setSearchQuery(s.label); setShowSuggestions(false); }}
                 >
                   <span className="suggestion-icon">
-                    {s.type === 'district'
-                      ? <MapPin size={16} strokeWidth={2.5} />
-                      : <School size={16} strokeWidth={2.5} />}
+                    {s.type === 'district' ? <MapPin size={16} strokeWidth={2.5}/> : <School size={16} strokeWidth={2.5} />}
                   </span>
                   <span className="suggestion-text">
                     <span className="suggestion-label">{s.label}</span>
@@ -232,6 +230,14 @@ function App() {
 
   const MainContent = (
     <main className="main-content">
+      {/* Page Title for Desktop */}
+      <h1 className="desktop-page-title">
+        {genderFilter === 'boys' ? 'Boys' : 'Girls'} Exam Centers
+      </h1>
+      <p className="desktop-page-sub">
+        List of all centers available for {genderFilter === 'boys' ? 'boys' : 'girls'}.
+      </p>
+
       {loading ? (
         renderSkeletons()
       ) : errorMsg ? (
@@ -260,7 +266,11 @@ function App() {
                 const showHeading = index === 0 || center.district !== filteredCenters[index - 1].district;
                 return (
                   <React.Fragment key={center.id}>
-                    {showHeading && <h2 className="district-heading">{center.district}</h2>}
+                    {showHeading && (
+                      <h2 className="district-heading">
+                        <Map size={14} strokeWidth={2.5} /> {center.district}
+                      </h2>
+                    )}
                     <div className="center-card" style={{ animationDelay: `${index * 0.025}s` }}>
                       <div className="card-top">
                         <h3 className="center-title">{center.centerName}</h3>
