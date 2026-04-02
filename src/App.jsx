@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MapPin, Phone, Building, Navigation, User, X } from 'lucide-react';
+import { Search, MapPin, Phone, Building, Navigation, User, X, School } from 'lucide-react';
 import Papa from 'papaparse';
 import './index.css';
 
@@ -212,7 +212,11 @@ function App() {
                   onMouseDown={(e) => { e.preventDefault(); setSearchQuery(s.label); setShowSuggestions(false); }}
                   onTouchEnd={(e) => { e.preventDefault(); setSearchQuery(s.label); setShowSuggestions(false); }}
                 >
-                  <span className="suggestion-icon">{s.type === 'district' ? '📍' : '🏫'}</span>
+                  <span className="suggestion-icon">
+                    {s.type === 'district'
+                      ? <MapPin size={16} strokeWidth={2.5} />
+                      : <School size={16} strokeWidth={2.5} />}
+                  </span>
                   <span className="suggestion-text">
                     <span className="suggestion-label">{s.label}</span>
                     {s.district && <span className="suggestion-sub">{s.district}</span>}
