@@ -32,7 +32,7 @@ function App() {
             const coordText = (row['CENTRE COORDINATOR NUMBER'] || '').trim();
             const mapLink = (row['MAP'] || '').trim();
 
-            const phoneMatch = coordText.match(/[\d\+\-\s]{10,15}/);
+            const phoneMatch = coordText.match(/[\d+\-\s]{10,15}/);
             const extractedPhone = phoneMatch ? phoneMatch[0].trim() : '';
 
             return {
@@ -118,11 +118,22 @@ function App() {
     <div className="app-container">
       {/* Header */}
       <header className="header">
-        <div className="header-icon-wrapper">
-          <MapPin size={28} strokeWidth={2.5} />
+        <div className="header-card">
+          <img 
+            src="/HEADER.jpg" 
+            alt="SNEET Centers" 
+            className="header-image"
+            onError={(e) => {
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'flex';
+            }}
+          />
+          {/* Fallback shown if the user hasn't saved the image in the public folder yet */}
+          <div className="header-fallback" style={{ display: 'none' }}>
+            <h1 className="fallback-title">SNEET CENTERS</h1>
+            <p className="fallback-subtitle">Save your image as <strong>HEADER.jpg</strong> in the <code>public</code> folder</p>
+          </div>
         </div>
-        <h1>SNEET Exam Centers</h1>
-        <p>Find your admission test center details instantly.</p>
       </header>
 
       {/* Segmented Control */}
