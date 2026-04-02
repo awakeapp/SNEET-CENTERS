@@ -162,27 +162,44 @@ function App() {
 
   const handlePinSubmit = async (e) => {
     e.preventDefault();
-    if (!pinInput.trim()) return;
+    const pin = pinInput.trim();
+    if (!pin) return;
 
     setIsPinSearching(true);
     try {
-      // Use Zippopotam API for Latitude/Longitude
-      const res = await fetch(`https://api.zippopotam.us/IN/${pinInput.trim()}`);
-      if (!res.ok) throw new Error("Invalid PIN");
-      
-      const data = await res.json();
-      if (data.places && data.places[0]) {
-        const place = data.places[0];
-        setUserCoords({ lat: parseFloat(place.latitude), lon: parseFloat(place.longitude) });
-        setSearchQuery(''); // Clear manual search when nearest is active
-        setShowPinModal(false);
-        setPinInput('');
-      } else {
-        alert("PIN Code not found. Try searching by Name.");
+      // 1. Try Zippopotam (Direct GPS)
+      const res = await fetch(`https://api.zippopotam.us/IN/${pin}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.places && data.places[0]) {
+          const place = data.places[0];
+          setUserCoords({ lat: parseFloat(place.latitude), lon: parseFloat(place.longitude) });
+          setSearchQuery('');
+          setShowPinModal(false);
+          setPinInput('');
+          return;
+        }
       }
+
+      // 2. Fallback to Indian Post Office (District)
+      const res2 = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+      const data2 = await res2.json();
+      if (data2[0]?.Status === "Success" && data2[0].PostOffice) {
+        const district = data2[0].PostOffice[0].District.toUpperCase().trim();
+        const coords = centerCoords.DISTRICT_COORDS?.[district];
+        if (coords) {
+          setUserCoords(coords);
+          setSearchQuery('');
+          setShowPinModal(false);
+          setPinInput('');
+          return;
+        }
+      }
+
+      alert("Location not found. Please try searching by your District name directly.");
     } catch (err) {
       console.error(err);
-      alert("PIN Code not found or not supported. Try using a main City/District search.");
+      alert("Error finding location. Please check your connection.");
     } finally {
       setIsPinSearching(false);
     }
