@@ -167,7 +167,7 @@ function App() {
 
     setIsPinSearching(true);
     try {
-      // 1. Try Zippopotam (Direct GPS)
+      // Step 1: Try Zippopotam (Direct High-Accuracy GPS)
       const res = await fetch(`https://api.zippopotam.us/IN/${pin}`);
       if (res.ok) {
         const data = await res.json();
@@ -181,22 +181,38 @@ function App() {
         }
       }
 
-      // 2. Fallback to Indian Post Office (District)
+      // Step 2: Fallback to Indian Post Office API (District Name)
       const res2 = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
       const data2 = await res2.json();
       if (data2[0]?.Status === "Success" && data2[0].PostOffice) {
-        const district = data2[0].PostOffice[0].District.toUpperCase().trim();
-        const coords = centerCoords.DISTRICT_COORDS?.[district];
-        if (coords) {
-          setUserCoords(coords);
-          setSearchQuery('');
-          setShowPinModal(false);
-          setPinInput('');
-          return;
+        const districtName = data2[0].PostOffice[0].District;
+        const stateName = data2[0].PostOffice[0].State;
+        
+        // Check if we have this district pre-calculated
+        const preCalculated = centerCoords.DISTRICT_COORDS?.[districtName.toUpperCase()];
+        if (preCalculated) {
+          setUserCoords(preCalculated);
+        } else {
+          // Step 3: UNIVERSAL FALLBACK - Geocode the District Name via Nominatim
+          const res3 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(districtName + ', ' + stateName + ', India')}&limit=1`, {
+            headers: { 'User-Agent': 'SNEET-Locator/1.0' }
+          });
+          const data3 = await res3.json();
+          if (data3?.[0]) {
+            setUserCoords({ lat: parseFloat(data3[0].lat), lon: parseFloat(data3[0].lon) });
+          } else {
+            alert(`Location found for ${districtName}, but distance calculation isn't ready. Showing all ${districtName} centers instead.`);
+            setSearchQuery(districtName);
+          }
         }
+        
+        setSearchQuery('');
+        setShowPinModal(false);
+        setPinInput('');
+        return;
       }
 
-      alert("Location not found. Please try searching by your District name directly.");
+      alert("PIN Code not found. Please try searching by your District name directly.");
     } catch (err) {
       console.error(err);
       alert("Error finding location. Please check your connection.");
