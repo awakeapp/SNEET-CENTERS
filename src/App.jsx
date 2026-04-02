@@ -207,18 +207,23 @@ function App() {
             </div>
           ) : (
             <div className="centers-grid">
-              {filteredCenters.map((center, index) => (
-                <div 
-                  className="center-card" 
-                  key={center.id}
-                  style={{ animationDelay: `${index * 0.03}s` }}
-                >
-                  <div className="card-top">
-                    <h3 className="center-title">{center.centerName}</h3>
-                    <span className="district-tag">{center.district}</span>
-                  </div>
-                  
-                  <div className="card-body">
+              {filteredCenters.map((center, index) => {
+                const showDistrictHeading = index === 0 || center.district !== filteredCenters[index - 1].district;
+
+                return (
+                  <React.Fragment key={center.id}>
+                    {showDistrictHeading && (
+                      <h2 className="district-heading">{center.district}</h2>
+                    )}
+                    <div 
+                      className="center-card" 
+                      style={{ animationDelay: `${index * 0.03}s` }}
+                    >
+                      <div className="card-top">
+                        <h3 className="center-title">{center.centerName}</h3>
+                      </div>
+                      
+                      <div className="card-body">
                     <div className="info-row">
                       <User className="info-icon" size={16} />
                       <span className="info-text">
@@ -246,8 +251,10 @@ function App() {
                       Navigate
                     </a>
                   </div>
-                </div>
-              ))}
+                    </div>
+                  </React.Fragment>
+                );
+              })}
             </div>
           )}
         </>
