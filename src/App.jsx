@@ -204,31 +204,40 @@ function App() {
       setUserCoords(targetCoords);
       setOriginAddress(finalAddress || `PIN ${pin}`);
       
-      // 2. Fetch ROAD ROUTES for all centers (OSRM - Instant & Free)
-      const newRouteData = {};
-      const requests = activeData.map(async (c) => {
+      // 2. Fetch ROAD ROUTES for all centers (OSRM Table API - Instant & Batch)
+      const centersToProcess = activeData.map(c => {
         let cCoords = centerCoords.INDIVIDUAL_CENTERS?.[c.centerName.toUpperCase().trim()];
         if (!cCoords) cCoords = centerCoords.DISTRICT_COORDS?.[c.district.toUpperCase().trim()];
-        
-        if (cCoords) {
-          try {
-            // OSRM provides ACTUAL road distance and duration
-            const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${targetCoords.lon},${targetCoords.lat};${cCoords.lon},${cCoords.lat}?overview=false`);
-            const rData = await r.json();
-            if (rData.routes?.[0]) {
-              const route = rData.routes[0];
-              newRouteData[c.id] = {
-                distance: Math.round(route.distance / 1000), // KM
-                time: route.duration, // Seconds
-                via: `${c.district} Rd` // Fallback via
-              };
-            }
-          } catch (err) { console.error("Route fail", err); }
-        }
-      });
+        return { id: c.id, coords: cCoords, district: c.district };
+      }).filter(c => c.coords).slice(0, 25); // Process top 25 in one go
 
-      await Promise.all(requests.slice(0, 15)); // Fetch top 15 for speed
-      setRouteData(newRouteData);
+      if (centersToProcess.length > 0) {
+        const coordsQuery = [
+          `${targetCoords.lon},${targetCoords.lat}`,
+          ...centersToProcess.map(c => `${c.coords.lon},${c.coords.lat}`)
+        ].join(';');
+
+        try {
+          // One single request for ALL distances/durations
+          const r = await fetch(`https://router.project-osrm.org/table/v1/driving/${coordsQuery}?sources=0&annotations=distance,duration`);
+          const rData = await r.json();
+          
+          if (rData.durations?.[0]) {
+            const newRouteData = {};
+            rData.durations[0].forEach((duration, idx) => {
+              if (idx === 0) return; // Skip self-distance
+              const center = centersToProcess[idx - 1];
+              newRouteData[center.id] = {
+                distance: Math.round(rData.distances[0][idx] / 1000), // KM
+                time: duration, // Seconds
+                via: `${center.district} Rd`
+              };
+            });
+            setRouteData(newRouteData);
+          }
+        } catch (err) { console.error("Batch Route fail", err); }
+      }
+
       setSearchQuery('');
       setShowPinModal(false);
       setPinInput('');

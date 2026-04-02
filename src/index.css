@@ -463,43 +463,67 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
+  gap: 0.75rem;
   width: 100%;
-  padding: 0.85rem;
-  margin-top: 1rem;
+  padding: 1rem;
+  margin-top: 1.25rem;
   background: white;
   color: var(--primary);
-  border: 1.5px solid var(--primary-soft);
-  border-radius: var(--r-lg);
-  font-weight: 700;
-  font-size: 0.9rem;
+  border: 2px solid var(--primary-soft);
+  border-radius: var(--r-xl);
+  font-weight: 800;
+  font-size: 0.95rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.find-nearest-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 120%; height: 120%;
+  background: var(--primary-soft);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.5s ease;
+  z-index: 0;
+}
+
+.find-nearest-btn span, .find-nearest-btn svg {
+  position: relative;
+  z-index: 1;
 }
 
 .find-nearest-btn:hover {
-  background: var(--primary-soft);
-  transform: translateY(-1px);
+  border-color: var(--primary);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.find-nearest-btn:hover::after {
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .find-nearest-btn:active {
-  transform: scale(0.98);
+  transform: translateY(0) scale(0.98);
 }
 
-/* ─── PIN MODAL ─── */
+/* ─── PIN MODAL OVERHAUL ─── */
 .pin-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
-  animation: fadeIn 0.3s ease;
+  padding: 1.25rem;
+  animation: fadeIn 0.4s ease;
 }
 
 @keyframes fadeIn {
@@ -510,15 +534,17 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 .pin-modal-content {
   background: white;
   width: 100%;
-  max-width: 400px;
-  border-radius: var(--r-xl);
-  padding: 2rem;
-  box-shadow: var(--shadow-lg);
-  animation: modalSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 440px;
+  border-radius: 28px;
+  padding: 2.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: modalPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  border: 1px solid rgba(255,255,255,0.8);
 }
 
-@keyframes modalSlide {
-  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+@keyframes modalPop {
+  from { opacity: 0; transform: translateY(30px) scale(0.9); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
@@ -526,180 +552,219 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .pin-modal-header h3 {
-  font-size: 1.25rem;
-  font-weight: 800;
+  font-size: 1.5rem;
+  font-weight: 900;
   color: var(--text-1);
+  letter-spacing: -0.02em;
 }
 
 .close-modal {
-  background: none;
+  background: #F1F5F9;
   border: none;
-  color: var(--text-3);
+  color: var(--text-2);
   cursor: pointer;
-  padding: 4px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.close-modal:hover {
+  background: #E2E8F0;
+  color: var(--primary);
+  transform: rotate(90deg);
 }
 
 .pin-modal-desc {
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: var(--text-2);
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
+  margin-bottom: 2rem;
+  line-height: 1.6;
 }
 
 .pin-input-group {
   display: flex;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+@media (min-width: 480px) {
+  .pin-input-group {
+    flex-direction: row;
+  }
 }
 
 .pin-input-group input {
   flex: 1;
-  padding: 1rem 1.25rem;
+  padding: 1.1rem 1.5rem;
   background: #F8FAFC;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  font-size: 1.1rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
+  border: 2px solid var(--border);
+  border-radius: 18px;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 0.25em;
   text-align: center;
+  color: var(--text-1);
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
 }
 
 .pin-input-group input:focus {
   border-color: var(--primary);
   background: white;
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  box-shadow: 0 0 0 4px var(--primary-soft);
 }
 
 .pin-input-group button {
-  padding: 0 1.5rem;
+  padding: 0 2rem;
+  min-height: 60px;
   background: var(--primary);
   color: white;
   border: none;
-  border-radius: var(--r-md);
-  font-weight: 700;
+  border-radius: 18px;
+  font-weight: 800;
+  font-size: 1.1rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(229, 62, 53, 0.3);
+}
+
+.pin-input-group button:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(229, 62, 53, 0.4);
 }
 
 .pin-input-group button:disabled {
-  opacity: 0.5;
+  background: var(--text-3);
+  box-shadow: none;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .pin-modal-note {
-  font-size: 0.75rem;
-  color: var(--text-3);
+  font-size: 0.8rem;
+  color: var(--text-2);
   text-align: center;
-  background: #F8FAFC;
-  padding: 0.75rem;
-  border-radius: var(--r-sm);
-  line-height: 1.4;
+  background: #FEF2F2;
+  padding: 1rem;
+  border-radius: 16px;
+  line-height: 1.5;
+  border: 1px solid rgba(229, 62, 53, 0.1);
+  color: var(--primary-hover);
 }
 
-/* Adjust for desktop sidebar */
-@media (min-width: 900px) {
-  .find-nearest-btn {
-    margin-top: 1.5rem;
-  }
-}
-
-/* ─── DISTANCE BADGE ─── */
+/* ─── DISTANCE BADGE / TAGS ─── */
 .distance-badge {
-  background: var(--primary-soft);
-  color: var(--primary);
-  padding: 0.25rem 0.65rem;
-  border-radius: 6px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+  background: var(--primary);
+  color: white;
+  padding: 0.35rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  box-shadow: 0 4px 10px rgba(229, 62, 53, 0.25);
+}
+
+.time-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-top: 2px;
 }
 
 .clear-nearest {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  background: #EEF1F5;
-  color: var(--text-2);
-  border: none;
-  padding: 0.4rem 0.75rem;
+  gap: 0.5rem;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid rgba(229, 62, 53, 0.1);
+  padding: 0.5rem 1rem;
   border-radius: 100px;
-  font-size: 0.73rem;
-  font-weight: 700;
+  font-size: 0.8rem;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .clear-nearest:hover {
-  background: #E2E6EC;
-  color: var(--primary);
+  background: var(--primary);
+  color: white;
+  transform: scale(1.05);
 }
 
-.card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-}
-
-.center-title {
-  flex: 1;
-}
-
-/* ─── ROUTE & TIME BADGES ─── */
-.card-top-right {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-
-.time-badge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--text-3);
-  text-transform: uppercase;
-}
-
+/* ─── ROUTE & DIRECTIONS UI ─── */
 .route-info-box {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.7rem 0.9rem;
+  gap: 0.85rem;
+  padding: 1rem 1.25rem;
   background: #F8FAFC;
-  border-radius: var(--r-md);
-  margin-bottom: 1.1rem;
-  border-left: 3px solid var(--primary);
-  animation: slideInFast 0.3s ease-out;
+  border-radius: 18px;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  animation: slideLeft 0.5s ease backwards;
 }
 
-@keyframes slideInFast {
-  from { opacity: 0; transform: translateX(-10px); }
+@keyframes slideLeft {
+  from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+.route-info-box::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: linear-gradient(to bottom, var(--primary), #FF7D75);
 }
 
 .route-icon {
   color: var(--primary);
   flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(229, 62, 53, 0.2));
 }
 
 .route-text {
-  font-size: 0.8rem;
+  font-size: 0.95rem;
   color: var(--text-2);
   line-height: 1.4;
 }
 
 .route-text strong {
   color: var(--text-1);
+  font-weight: 800;
 }
 
-/* Adjust distance badge slightly for this new layout */
-.distance-badge {
-  box-shadow: 0 1px 2px rgba(229,62,53,0.15);
+/* Sidebar Specific Adjustment */
+@media (min-width: 900px) {
+  .find-nearest-btn {
+    margin-top: 1.5rem;
+  }
 }
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.card-top-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
