@@ -633,26 +633,51 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
-.gps-btn-compact {
+.gps-btn-full {
+  width: 100%;
+  padding: 0.7rem 1rem;
   background: white;
   border: 1px solid #E2E8F0;
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-2);
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-1);
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-  transition: all 0.2s;
-  flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
-.gps-btn-compact:hover {
+.gps-btn-full:hover {
+  border-color: var(--primary);
   color: var(--primary);
-  border-color: var(--primary-soft);
-  background: var(--primary-soft);
+  background: #F8FAFC;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.modal-divider-compact {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.modal-divider-compact::before,
+.modal-divider-compact::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #E2E8F0;
+}
+
+.modal-divider-compact span {
+  padding: 0 0.75rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #94A3B8;
 }
 
 .premium-pin-input {
@@ -724,10 +749,12 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 }
 
 .pin-modal-footer-note {
-  margin-top: 1rem;
+  margin-top: 1.25rem;
   font-size: 0.75rem;
   color: #94A3B8;
   font-weight: 500;
+  text-align: center;
+  line-height: 1.4;
 }
 
 .pin-modal-note {

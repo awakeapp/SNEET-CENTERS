@@ -681,9 +681,6 @@ function App() {
                   <>
                     <form onSubmit={handlePinSubmit} className="modern-pin-form">
                       <div className="input-group-compact">
-                        <button className="gps-btn-compact" onClick={handleGeoLocation} type="button" aria-label="Use GPS" title="Use my current location">
-                          <MapPin size={18} />
-                        </button>
                         <input type="text" pattern="[0-9]*" inputMode="numeric" maxLength="6"
                           placeholder="Your PIN" className="premium-pin-input" value={pinInput}
                           onChange={e => { setPinInput(e.target.value.replace(/\D/g,'')); setPinError(''); }}
@@ -693,10 +690,21 @@ function App() {
                         </button>
                       </div>
 
+                      <div className="modal-divider-compact"><span>OR</span></div>
+
+                      <button className="gps-btn-full" onClick={handleGeoLocation} type="button">
+                        <MapPin size={16} />
+                        <span>Use My Current Location</span>
+                      </button>
+
                       {pinError && (
                         <div className="pin-error-msg-modern" role="alert">{pinError}</div>
                       )}
                     </form>
+                    
+                    <p className="pin-modal-footer-note">
+                      * For international locations, please search directly in the main search bar.
+                    </p>
                   </>
                 )}
               </div>
