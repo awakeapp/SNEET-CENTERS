@@ -682,7 +682,7 @@ function App() {
                     <form onSubmit={handlePinSubmit} className="modern-pin-form">
                       <div className="input-group-compact">
                         <input type="text" pattern="[0-9]*" inputMode="numeric" maxLength="6"
-                          placeholder="Your PIN" className="premium-pin-input" value={pinInput}
+                          placeholder="Your PIN code" className="premium-pin-input" value={pinInput}
                           onChange={e => { setPinInput(e.target.value.replace(/\D/g,'')); setPinError(''); }}
                           autoFocus aria-label="Enter your 6-digit PIN code" />
                         <button type="submit" className="premium-search-btn" disabled={pinInput.length < 6}>
@@ -734,7 +734,9 @@ function App() {
                     const showHeading = index === 0 || center.district !== filteredCenters[index-1].district;
 
                     // ── Get Directions / Navigate URL ──
-                    const originParam = userCoords ? `${userCoords.lat},${userCoords.lon}` : '';
+                    const originParam = (userCoords && originAddress && originAddress !== 'Your Location')
+                      ? encodeURIComponent(originAddress)
+                      : userCoords ? `${userCoords.lat},${userCoords.lon}` : '';
                     const cleanName   = center.centerName.replace(/\s*\n\s*/g, ', ').trim();
                     const destSearch  = encodeURIComponent(`${cleanName}, ${center.district}, India`);
                     const directionsUrl = userCoords
