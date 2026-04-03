@@ -864,7 +864,7 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   border: 1px solid var(--border-strong);
   border-radius: 16px;
   animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-  margin: 1.25rem 0 0.85rem;
+  margin: 2rem 0 2rem !important;
   box-shadow: 0 4px 14px rgba(0,0,0,0.06);
   position: relative;
   overflow: hidden;
