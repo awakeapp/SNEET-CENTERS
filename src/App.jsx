@@ -660,15 +660,14 @@ function App() {
           <div className="pin-modal-overlay" onClick={closeModal}>
             <div className="pin-modal-content" onClick={e => e.stopPropagation()}>
               <button className="close-modal-minimal" onClick={closeModal} aria-label="Close modal">
-                <X size={20}/>
+                <X size={18}/>
               </button>
 
               <div className="pin-modal-inner">
-                <div className="pin-modal-icon-wrapper">
-                  <Crosshair className="modal-icon-main" size={32} />
+                <div className="modal-header-compact">
+                  <Crosshair className="modal-icon-inline" size={20} />
+                  <h3 className="modal-title-modern">Find Nearest Center</h3>
                 </div>
-
-                <h3 className="modal-title-modern">Find Nearest Center</h3>
 
                 {isSearching ? (
                   <div className="search-phase-indicator">
@@ -680,35 +679,24 @@ function App() {
                   </div>
                 ) : (
                   <>
-                    <p className="modal-text-minimal">Locate the nearest centers by road distance using GPS or your PIN code.</p>
-
-                    <button className="location-btn-modern" onClick={handleGeoLocation} type="button" aria-label="Use my GPS location">
-                      <MapPin size={18} />
-                      <span>Use My Current Location</span>
-                    </button>
-
-                    <div className="modal-divider-modern"><span>or enter PIN code</span></div>
-
                     <form onSubmit={handlePinSubmit} className="modern-pin-form">
-                      <div className="pin-input-modern-wrapper">
+                      <div className="input-group-compact">
+                        <button className="gps-btn-compact" onClick={handleGeoLocation} type="button" aria-label="Use GPS" title="Use my current location">
+                          <MapPin size={18} />
+                        </button>
                         <input type="text" pattern="[0-9]*" inputMode="numeric" maxLength="6"
-                          placeholder="000 000" className="premium-pin-input" value={pinInput}
+                          placeholder="Your PIN" className="premium-pin-input" value={pinInput}
                           onChange={e => { setPinInput(e.target.value.replace(/\D/g,'')); setPinError(''); }}
                           autoFocus aria-label="Enter your 6-digit PIN code" />
+                        <button type="submit" className="premium-search-btn" disabled={pinInput.length < 6}>
+                          <Search size={18} />
+                        </button>
                       </div>
 
                       {pinError && (
                         <div className="pin-error-msg-modern" role="alert">{pinError}</div>
                       )}
-
-                      <button type="submit" className="premium-search-btn" disabled={pinInput.length < 6}>
-                        <span>Find Nearest Center</span>
-                      </button>
                     </form>
-
-                    <p className="pin-modal-footer-note">
-                      For international locations, please use the main search bar.
-                    </p>
                   </>
                 )}
               </div>
