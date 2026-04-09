@@ -5,6 +5,7 @@ import './index.css';
 
 const BOYS_CSV_URL  = "/data/boys_centers.csv";
 const GIRLS_CSV_URL = "/data/girls_centers.csv";
+const GOOGLE_MAPS_API_KEY = "AIzaSyCQSfsKGe0YuCyRMp5qqNJeWypcyHYuhZc";
 
 function App() {
   const [genderFilter, setGenderFilter] = useState('boys');
