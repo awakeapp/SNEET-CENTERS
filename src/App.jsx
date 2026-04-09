@@ -155,7 +155,6 @@ function App() {
   /* ── Route calculation (stable reference via useCallback) ── */
   const runRouteCalculation = useCallback(async (targetCoords, data, coords) => {
     const coordMap = coords;
-    const rCoords  = resolvedCoordsRef.current;
 
     // Step 1: haversine for every center using sheet coords
     const hvDists  = {};
@@ -280,6 +279,7 @@ function App() {
             });
           };
 
+          for (const c of sorted) {
             const jc    = c.lat && c.lon ? { lat: c.lat, lon: c.lon } : null;
             let destC   = jc?.lat ? jc : null;
 
