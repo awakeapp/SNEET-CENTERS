@@ -1,33 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Search, MapPin, Phone, Building, Navigation, User, X, School, Map, Crosshair } from 'lucide-react';
+import { Search, MapPin, Phone, Building, Navigation, User, X, School, Map, Crosshair, List, LayoutList, Calendar, Info } from 'lucide-react';
 import Papa from 'papaparse';
+import MapView from './MapView.jsx';
+import CenterDetailsModal from './CenterDetailsModal';
+import { loadGoogleMaps, GOOGLE_MAPS_API_KEY } from './utils';
 import './index.css';
 
-const BOYS_CSV_URL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vReXaCcSjfY47O5-qzYTNZdQKS7DLgj8iZMGW5g40mkKvRBKlj1FZ3B20KOE9rgpbxMp8Sma4Lsl9BT/pub?gid=0&single=true&output=csv";
-const GIRLS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vReXaCcSjfY47O5-qzYTNZdQKS7DLgj8iZMGW5g40mkKvRBKlj1FZ3B20KOE9rgpbxMp8Sma4Lsl9BT/pub?gid=1887904745&single=true&output=csv";
+const BOYS_CSV_URL  = "/data/boys_centers.csv";
+const GIRLS_CSV_URL = "/data/girls_centers.csv";
 const DEFAULT_HOURS       = "Mon–Sat, 9:00 AM – 5:00 PM";
-const GOOGLE_MAPS_API_KEY = "AIzaSyCQSfsKGe0YuCyRMp5qqNJeWypcyHYuhZc";
 
-// ─── Geocode cache ───
-const GEO_CACHE_KEY  = 'sneet_geocache_v3'; // v3: invalidates wrong v2 placeIds
-const readGeoCache   = () => { try { return JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}'); } catch { return {}; } };
-const writeGeoCache  = (d) => { try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(d)); } catch(e) { console.warn(e); } };
-
-/* ─── FIX 1: loadGoogleMaps at MODULE level (no hoisting issue, promise cached) ─── */
-let _gmapsPromise = null;
-const loadGoogleMaps = () => {
-  if (window.google?.maps?.DirectionsService && window.google?.maps?.DistanceMatrixService) return Promise.resolve();
-  if (_gmapsPromise) return _gmapsPromise;
-  _gmapsPromise = new Promise((resolve, reject) => {
-    window.__gmapsResolve = () => resolve();
-    const s = document.createElement('script');
-    s.id  = 'gmaps-script';
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&callback=__gmapsResolve&libraries=geocoding,directions`;
-    s.onerror = (e) => { _gmapsPromise = null; reject(e); };
-    document.head.appendChild(s);
-  });
-  return _gmapsPromise;
-};
+// (Removed GeoCache since new schema includes explicit latitude & longitude)
 
 /* ─── Helpers ─── */
 const haversine = (lat1, lon1, lat2, lon2) => {
@@ -44,9 +27,8 @@ const formatTime = (seconds) => {
   return `${h} hr ${m} min`;
 };
 
-/* ─── Short address helper (avoids long strings in UI) ─── */
 const shortAddr = (full, pin) => {
-  if (!full) return `PIN ${pin}`;
+  if (!full) return pin ? `PIN ${pin}` : 'Location';
   const parts = full.split(',').map(p => p.trim()).filter(Boolean);
   return parts.slice(0, 2).join(', ');
 };
@@ -56,57 +38,65 @@ function App() {
   const [genderFilter, setGenderFilter] = useState('boys');
   const [boysData,  setBoysData]  = useState([]);
   const [girlsData, setGirlsData] = useState([]);
-  const [searchQuery,     setSearchQuery]     = useState('');
+  const [selectedDistrict, setSelectedDistrict]     = useState('');
   const [showPinModal,    setShowPinModal]    = useState(false);
-  const [pinInput,        setPinInput]        = useState('');
+  const [modalSearch,     setModalSearch]     = useState('');
   const [searchPhase,     setSearchPhase]     = useState(null);
   const [pinError,        setPinError]        = useState('');
+  const [viewMode,        setViewMode]        = useState('list');
+  const [isCalcRoutes,    setIsCalcRoutes]    = useState(false);
+  const [selectedCenterModal, setSelectedCenterModal] = useState(null);
+  const [placeSuggestions,setPlaceSuggestions]= useState([]);
+  const [showPlaceDrop,   setShowPlaceDrop]   = useState(false);
+  const autocompleteTimer = useRef(null);
   const [userCoords,      setUserCoords]      = useState(null);
   const [originAddress,   setOriginAddress]   = useState('');
   const [centerCoords,    setCenterCoords]    = useState({});
   const [routeData,       setRouteData]       = useState({});
   const [haversineDists,  setHaversineDists]  = useState({});
-  const [viaData,         setViaData]         = useState({}); // "Via Town1 · Town2"
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [viaData,         setViaData]         = useState({});
+  const [mapsLoaded,      setMapsLoaded]      = useState(false);
   const [loading,  setLoading]  = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [autoNavPopup, setAutoNavPopup] = useState(null);
 
-  /* FIX 1: resolvedCoords seeded from localStorage cache */
-  const [resolvedCoords, setResolvedCoords] = useState(readGeoCache);
-  const resolvedCoordsRef = useRef(resolvedCoords);
-  useEffect(() => { resolvedCoordsRef.current = resolvedCoords; }, [resolvedCoords]);
-
+  // Cache removed
   const searchRef         = useRef(null);
-  const findNearestBtnRef = useRef(null);
   const userCoordsRef     = useRef(null);
   useEffect(() => { userCoordsRef.current = userCoords; }, [userCoords]);
 
-  /* ── CSV parser ── */
+  /* ── CSV parser (New Clean Schema) ── */
   const parseCsvData = (csvText) => new Promise((resolve, reject) => {
     Papa.parse(csvText, {
       header: true, skipEmptyLines: true,
       complete: (results) => {
-        let currentDistrict = 'Unknown';
-        const formatted = results.data.map((row, index) => {
-          const rowDist = (row['DISTRICT'] || '').trim();
-          if (rowDist) currentDistrict = rowDist;
-          const centerName = (row['NAME OF THE EXAM CENTRE'] || '').trim();
-          const coordText  = (row['CENTRE COORDINATOR NUMBER'] || '').trim();
-          const mapLink    = (row['MAP'] || '').trim();
-          const phoneMatch = coordText.match(/[\d+\-\s]{10,15}/);
-          const phone = phoneMatch ? phoneMatch[0].trim() : '';
-          let coordinator = coordText;
-          if (phone) coordinator = coordText.replace(phone, '').replace(/[,\-():]+/g,' ').replace(/\s\s+/g,' ').trim();
-          return { id: index, district: currentDistrict, centerName, coordinator: coordinator || 'Help Desk', phone, mapLink };
-        }).filter(c => c.centerName !== '');
+        const formatted = results.data.map((row) => {
+          const lat = parseFloat(row['latitude']);
+          const lon = parseFloat(row['longitude']);
+          return {
+            id: (row['id'] || '').trim() || Math.random().toString(36).substr(2, 9),
+            district: (row['district'] || '').trim(),
+            centerName: (row['center_name'] || '').trim(),
+            coordinator: (row['contact_person'] || 'Help Desk').trim(),
+            phone: (row['phone_number'] || '').trim(),
+            address: (row['address'] || '').trim(),
+            lat: lat,
+            lon: lon,
+            hasPreciseCoord: !isNaN(lat) && !isNaN(lon),
+            status: (row['status'] || '').toUpperCase() === 'TRUE',
+            mapLink: (row['map_link'] || '').trim() 
+          };
+        }).filter(c => c.centerName !== '' && c.status !== false);
         resolve(formatted);
       },
       error: (err) => reject(err),
     });
   });
 
-  /* ── Data fetch ── */
+  /* ── Data fetch + pre-load Google Maps SDK on mount ── */
   useEffect(() => {
+    loadGoogleMaps().then(() => setMapsLoaded(true)).catch(() => {});
+
     (async () => {
       setLoading(true);
       try {
@@ -132,126 +122,107 @@ function App() {
     })();
   }, []);
 
-  /* ── FIX 2 & 4: Auto-geocode — runs only when new centers appear, proper guard ── */
+  /* ── DISABLED: Auto-geocode loop (Prevents Google Geocoding Quota/Error overkill) ── */
   useEffect(() => {
-    if (!boysData.length && !girlsData.length) return;
-    const allCenters = [...boysData, ...girlsData];
-    const cache   = readGeoCache();
-    const missing = allCenters.filter((c, i, arr) =>
-      c.centerName && !cache[c.centerName] &&
-      arr.findIndex(x => x.centerName === c.centerName) === i  // dedupe
-    );
-    if (!missing.length) return; // FIX 4: all cached, skip
-
-    (async () => {
-      try {
-        await loadGoogleMaps();
-        const geocoder = new window.google.maps.Geocoder();
-        for (const center of missing) {
-          if (cache[center.centerName]) continue;
-          await new Promise(resolve => {
-            geocoder.geocode(
-              { address: `${center.centerName.replace(/\s*\n\s*/g,', ')}, ${center.district}, India`, region: 'IN' },
-              (results, status) => {
-                if (status === 'OK' && results[0]) {
-                  cache[center.centerName] = {
-                    lat: results[0].geometry.location.lat(),
-                    lon: results[0].geometry.location.lng(),
-                    placeId: results[0].place_id,
-                  };
-                }
-                resolve();
-              }
-            );
-          });
-          await new Promise(r => setTimeout(r, 150));
-        }
-        writeGeoCache(cache);
-        setResolvedCoords({ ...cache });
-      } catch (e) { console.error('Auto-geocode fail:', e); }
-    })();
-  }, [boysData, girlsData]);
+    // Relying on data/center_coords.json and on-demand lookups now.
+  }, []);
 
   const activeData = genderFilter === 'boys' ? boysData : girlsData;
 
-  /* ── Search suggestions ── */
-  const suggestions = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase().trim();
-    const districtMatches = [...new Set(activeData.map(c => c.district))]
-      .filter(d => d.toLowerCase().includes(q)).map(d => ({ type: 'district', label: d }));
-    const centerMatches = activeData
-      .filter(c => c.centerName.toLowerCase().includes(q)).slice(0, 6)
-      .map(c => ({ type: 'center', label: c.centerName, district: c.district }));
-    return [...districtMatches.slice(0, 3), ...centerMatches].slice(0, 8);
-  }, [searchQuery, activeData]);
+  /* ── Districts Dropdown ── */
+  const uniqueDistricts = useMemo(() => {
+    return [...new Set(activeData.map(c => c.district))].sort();
+  }, [activeData]);
 
   useEffect(() => {
-    const h = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setShowSuggestions(false); };
+    const h = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setShowPlaceDrop(false); };
     document.addEventListener('mousedown', h);
     document.addEventListener('touchstart', h);
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('touchstart', h); };
   }, []);
 
   /* ── Route calculation (stable reference via useCallback) ── */
-  const runRouteCalculation = useCallback(async (targetCoords, data, coords) => {
-    const coordMap = coords;
-    const rCoords  = resolvedCoordsRef.current;
-
-    // Step 1: haversine for every center using best available coords
+  const runRouteCalculation = useCallback(async (targetCoords, data) => {
+    // Step 1: haversine for every center using explicit coords
     const hvDists  = {};
     const allMapped = data.map(c => {
-      const cached  = rCoords[c.centerName];
-      const nameKey = c.centerName.toUpperCase().trim().replace(/\s*\n\s*/g,' ');
-      const jsonC   = coordMap.INDIVIDUAL_CENTERS?.[nameKey]
-                   || coordMap.DISTRICT_COORDS?.[c.district.toUpperCase().trim()];
-      const best    = cached || jsonC;
-      if (!best) return null;
-      const hv = haversine(targetCoords.lat, targetCoords.lon, best.lat, best.lon);
+      if (!c.hasPreciseCoord) return null;
+      const hv = haversine(targetCoords.lat, targetCoords.lon, c.lat, c.lon);
       hvDists[c.id] = hv;
-      return { ...c, hv, hasPreciseCoord: !!cached };
+      return { ...c, hv };
     }).filter(Boolean);
 
     setHaversineDists(hvDists);
     if (!allMapped.length) return;
 
-    // Step 2: instant estimate (haversine × 1.5) while Google calculates
-    const estimated = {};
-    allMapped.forEach(c => {
-      const est = Math.round(c.hv * 1.5);
-      estimated[c.id] = { distance: Math.max(1, est), time: Math.round(est/50*3600), isApprox: true };
-    });
-    setRouteData(estimated);
+    setIsCalcRoutes(true);
 
-    // Step 3: top 25 by haversine
-    const sorted = [...allMapped].sort((a,b) => a.hv - b.hv).slice(0, 25);
+    // Step 3: top 50 by haversine (was 15 — too few, dropped many reachable centers)
+    const sorted = [...allMapped].sort((a,b) => a.hv - b.hv).slice(0, 50);
 
-    // Step 4: Google Maps Distance Matrix (precise coords or address string)
+    // Step 4: Google Maps Distance Matrix DISABLED (avoiding 'API Not Enabled' errors)
     let googleWorked = false;
-    if (GOOGLE_MAPS_API_KEY) {
+    let step4Results = {};
+    if (false && GOOGLE_MAPS_API_KEY) {
       try {
         await loadGoogleMaps();
         const svc    = new window.google.maps.DistanceMatrixService();
         const origin = new window.google.maps.LatLng(targetCoords.lat, targetCoords.lon);
 
-        // prefer geocoded LatLng; isApprox reflects actual precision
+        // ── Helper to extract destination from User-provided Sheet Link ──
+        const parseMapLink = (url) => {
+          if (!url) return null;
+          try {
+            const u = new URL(url);
+            // Case 1: Search or Dir URL with place_id
+            const pid = u.searchParams.get('destination_place_id') || u.searchParams.get('query_place_id') || u.searchParams.get('place_id');
+            if (pid) return { placeId: pid };
+
+            // Case 2: Search or Dir URL with query
+            const q = u.searchParams.get('query') || u.searchParams.get('destination') || u.searchParams.get('q');
+            if (q) return q;
+
+            // Case 3: Place URL /maps/place/Name/PlaceId
+            const placeMatch = url.match(/\/maps\/place\/[^/]+\/([^/?]+)/);
+            if (placeMatch && placeMatch[1].startsWith('ChIJ')) return { placeId: placeMatch[1] };
+
+            // Case 4: Default to text search if we can't find ID
+            return null; 
+          } catch {
+            return null;
+          }
+        };
+
+        // Priority 1: User's Sheet Link (Accurate)
+        // Priority 2: NOTHING (Previously auto-geocode "mess" removed)
         const makeDest = (c) => {
-          const rc = resolvedCoordsRef.current[c.centerName];
-          if (rc?.lat) return new window.google.maps.LatLng(rc.lat, rc.lon);
+          const sheetDest = parseMapLink(c.mapLink);
+          if (sheetDest) return sheetDest;
+
+          // Fallback to auto-coords so we don't delay the user with OSRM loops
           const nameKey = c.centerName.toUpperCase().trim().replace(/\s*\n\s*/g,' ');
-          const jc = coordMap.INDIVIDUAL_CENTERS?.[nameKey];
-          if (jc?.lat) return new window.google.maps.LatLng(jc.lat, jc.lon);
-          return `${c.centerName.replace(/\s*\n\s*/g,', ')}, ${c.district}, India`;
+          const cc = rCoords[c.centerName]
+                  || coordMap.INDIVIDUAL_CENTERS?.[nameKey]
+                  || coordMap.DISTRICT_COORDS?.[c.district.toUpperCase().trim()];
+          
+          if (cc) return new window.google.maps.LatLng(cc.lat, cc.lon);
+          return null;
         };
 
         const batches = [];
         for (let i = 0; i < sorted.length; i += 25) batches.push(sorted.slice(i, i+25));
 
         for (const batch of batches) {
+          const validDestinations = batch
+            .map((c, idx) => ({ dest: makeDest(c), center: c, originalIndex: idx }))
+            .filter(item => item.dest !== null);
+
+          if (validDestinations.length === 0) continue;
+
           await new Promise(res => {
             svc.getDistanceMatrix({
               origins: [origin],
-              destinations: batch.map(c => makeDest(c)),
+              destinations: validDestinations.map(v => v.dest),
               travelMode: window.google.maps.TravelMode.DRIVING,
               unitSystem: window.google.maps.UnitSystem.METRIC,
             }, (response, status) => {
@@ -259,16 +230,15 @@ function App() {
                 const nd = {};
                 response.rows[0].elements.forEach((el, idx) => {
                   if (el.status !== 'OK') return;
-                  const c = batch[idx];
-                  const hasGoodCoord = !!(resolvedCoordsRef.current[c.centerName]?.lat
-                    || coordMap.INDIVIDUAL_CENTERS?.[c.centerName.toUpperCase().trim().replace(/\s*\n\s*/g,' ')]?.lat);
+                  const c = validDestinations[idx].center;
                   nd[c.id] = {
                     distance: Math.max(1, Math.round(el.distance.value / 1000)),
                     time: el.duration.value,
-                    isApprox: !hasGoodCoord,
+                    isApprox: false, // It's strictly based on user's manual link
                   };
                 });
                 setRouteData(prev => ({ ...prev, ...nd }));
+                step4Results = { ...step4Results, ...nd };
                 googleWorked = true;
               }
               res();
@@ -276,7 +246,9 @@ function App() {
           });
         }
 
-        // -- Via: all centers, 2-point reverse-geocode at 25% and 75% of route --
+        setIsCalcRoutes(false); // Done with distance matrix, reveal cards
+
+        // -- Via: background reverse-geocode at 25/50/75% of route --
         if (googleWorked) {
           const geocoder = new window.google.maps.Geocoder();
 
@@ -330,17 +302,13 @@ function App() {
             });
           };
 
-          for (const c of sorted) {  // ALL centers, not just top 10
-            const rc    = resolvedCoordsRef.current[c.centerName];
-            const nKey  = c.centerName.toUpperCase().trim().replace(/\s*\n\s*/g,' ');
-            const jc    = coordMap.INDIVIDUAL_CENTERS?.[nKey]
-                       || coordMap.DISTRICT_COORDS?.[c.district.toUpperCase().trim()];
-            let destC   = rc?.lat ? rc : (jc?.lat ? jc : null);
+          for (const c of sorted) {
+            let destC   = c.hasPreciseCoord ? { lat: c.lat, lon: c.lon } : null;
 
             // Fallback: geocode district name if no preloaded coords
             if (!destC?.lat) {
               destC = await getDistrictCoords(c.district);
-              await new Promise(r => setTimeout(r, 120));
+              // No artificial delay — we are no longer blocking the UI
             }
             if (!destC?.lat) continue;
 
@@ -391,7 +359,6 @@ function App() {
                   towns.push(town);
                 }
               }
-              await new Promise(r => setTimeout(r, 120));
             }
 
             if (towns.length > 0) {
@@ -399,41 +366,104 @@ function App() {
             }
           }
         }
-
-
-
-
-
-
-
       } catch (e) { console.error('Google Distance Matrix fail:', e); }
     }
 
+    // Step 5a: Pre-fill with haversine estimates so cards appear instantly (~0ms)
+    // These will be replaced by OSRM batch results in Step 5b
+    const haversineEntries = {};
+    for (const c of sorted) {
+      if (!step4Results[c.id] && hvDists[c.id] != null) {
+        haversineEntries[c.id] = {
+          distance: Math.max(1, Math.round(hvDists[c.id] * 1.35)),
+          time: Math.round((hvDists[c.id] * 1.35) / 40 * 3600), // ~40 km/h avg
+          isApprox: true,
+        };
+      }
+    }
+    if (Object.keys(haversineEntries).length > 0) {
+      setRouteData(prev => ({ ...prev, ...haversineEntries }));
+    }
+    setIsCalcRoutes(false); // Cards visible immediately with estimates
 
-    // Step 5: OSRM fallback
-    if (!googleWorked) {
-      const withCoords = sorted.map(c => {
-        const nameKey = c.centerName.toUpperCase().trim().replace(/\s*\n\s*/g,' ');
-        const cc = resolvedCoordsRef.current[c.centerName]
-                || coordMap.INDIVIDUAL_CENTERS?.[nameKey]
-                || coordMap.DISTRICT_COORDS?.[c.district.toUpperCase().trim()];
-        return cc ? { ...c, coords: cc } : null;
-      }).filter(Boolean).slice(0, 10);
+    // Step 5b: OSRM TABLE API — single batch call for all centers at once.
+    // This replaces 50 sequential /route requests (which caused 50 re-renders / re-sorts)
+    // with 1 /table call → 1 state update → 1 clean re-sort.
+    const missingDist = sorted.filter(c => !step4Results[c.id]);
+    if (missingDist.length > 0) {
+      // Build a list of centers that have usable coordinates
+      const validCenters = missingDist.map(c => {
+        return c.hasPreciseCoord ? { center: c, cc: { lat: c.lat, lon: c.lon } } : null;
+      }).filter(Boolean);
 
-      const results = await Promise.allSettled(
-        withCoords.map(c =>
-          fetch(`https://router.project-osrm.org/route/v1/driving/${targetCoords.lon},${targetCoords.lat};${c.coords.lon},${c.coords.lat}?overview=false`)
-            .then(r => r.json()).then(d => ({ c, d }))
-        )
-      );
-      const nd = { ...estimated };
-      results.forEach(r => {
-        if (r.status !== 'fulfilled') return;
-        const { c, d } = r.value;
-        if (d.code !== 'Ok' || !d.routes?.[0]) return;
-        nd[c.id] = { distance: Math.max(1, Math.round(d.routes[0].distance/1000)), time: Math.round(d.routes[0].duration), isApprox: true };
-      });
-      setRouteData(nd);
+      if (validCenters.length > 0) {
+        const targetLng = targetCoords.lng || targetCoords.lon;
+
+        // OSRM /table: source = index 0 (user), destinations = index 1..N
+        // Format: /table/v1/driving/lon,lat;lon,lat;...?sources=0&destinations=1;2;3;...
+        const coords = [
+          `${targetLng},${targetCoords.lat}`,
+          ...validCenters.map(({ cc }) => `${cc.lon},${cc.lat}`),
+        ].join(';');
+        const destIndices = validCenters.map((_, i) => i + 1).join(';');
+
+        try {
+          const res = await fetch(
+            `https://router.project-osrm.org/table/v1/driving/${coords}?sources=0&destinations=${destIndices}&annotations=duration,distance`
+          );
+          const data = await res.json();
+
+          if (data.code === 'Ok' && data.durations?.[0] && data.distances?.[0]) {
+            const batchEntries = {};
+            validCenters.forEach(({ center }, i) => {
+              const rawSecs = data.durations[0][i];     // seconds from OSRM
+              const rawMeters = data.distances[0][i];   // meters from OSRM
+              if (rawSecs == null || rawSecs <= 0) return;
+
+              // Kerala road correction:
+              // OSRM /table uses straight-line time estimates (faster than /route).
+              // Apply 1.5x for duration and 1.2x for distance to approximate real Kerala roads.
+              batchEntries[center.id] = {
+                distance: Math.max(1, Math.round((rawMeters / 1000) * 1.2)),
+                time: Math.round(rawSecs * 1.5),
+                isApprox: false,
+              };
+            });
+
+            // Single atomic update — one re-render, one re-sort, no jumps
+            if (Object.keys(batchEntries).length > 0) {
+              setRouteData(prev => ({ ...prev, ...batchEntries }));
+            }
+          } else {
+            // OSRM table failed — fall back to individual /route calls in parallel (Promise.all)
+            await Promise.all(
+              validCenters.map(async ({ center, cc }) => {
+                try {
+                  const r = await fetch(
+                    `https://router.project-osrm.org/route/v1/driving/${targetLng},${targetCoords.lat};${cc.lon},${cc.lat}?overview=false`
+                  );
+                  const d = await r.json();
+                  if (d.code === 'Ok' && d.routes?.[0]) {
+                    return {
+                      id: center.id,
+                      distance: Math.max(1, Math.round(d.routes[0].distance / 1000)),
+                      time: Math.round(d.routes[0].duration * 1.4),
+                      isApprox: false,
+                    };
+                  }
+                } catch { /* ignore */ }
+                return null;
+              })
+            ).then(results => {
+              const fallback = {};
+              results.filter(Boolean).forEach(e => { fallback[e.id] = { distance: e.distance, time: e.time, isApprox: e.isApprox }; });
+              if (Object.keys(fallback).length > 0) setRouteData(prev => ({ ...prev, ...fallback }));
+            });
+          }
+        } catch {
+          // Network error — leave haversine estimates in place
+        }
+      }
     }
   }, []); // stable ref — reads latest data via refs
 
@@ -448,26 +478,111 @@ function App() {
 
   /* ── Modal close ── */
   const closeModal = () => {
-    setShowPinModal(false); setSearchPhase(null); setPinError(''); setPinInput('');
-    setTimeout(() => findNearestBtnRef.current?.focus(), 100);
+    setShowPinModal(false);
+    setSearchPhase(null); setPinError('');
+    setShowPlaceDrop(false);
   };
 
-  /* ── FIX 2: PIN submit — uses JS SDK Geocoder (not REST API) ── */
-  const handlePinSubmit = async (e) => {
+  /* ── Modal Input Logic via Google Places API ── */
+  const handleModalInput = (val) => {
+    setModalSearch(val);
+    setPinError('');
+    if (!val.trim() || val.length < 2) { 
+        setShowPlaceDrop(false); 
+        setPlaceSuggestions([]); 
+        return; 
+    }
+    setShowPlaceDrop(true);
+    
+    // Remote places call
+    clearTimeout(autocompleteTimer.current);
+    autocompleteTimer.current = setTimeout(() => {
+      try {
+        if (!window.google?.maps?.places?.AutocompleteService) return;
+        const svc = new window.google.maps.places.AutocompleteService();
+        
+        // Check if val is likely a PIN code
+        const isPin = /^\d{3,6}$/.test(val.trim());
+        
+        const req = isPin ? { input: val, componentRestrictions: { country: 'in' }, types: ['postal_code'] } : {
+            input: val,
+            // Hard-restrict to Kerala bounding box so 'Yedapala' returns Edappal (Malappuram)
+            // not Yedapala, Karnataka or Tamil Nadu
+            locationRestriction: new window.google.maps.LatLngBounds(
+              new window.google.maps.LatLng(8.0883, 74.8603), // SW: Kanyakumari–Kasaragod area
+              new window.google.maps.LatLng(12.8458, 77.2000)  // NE: Kasaragod–Wayanad area
+            ),
+        };
+
+        svc.getPlacePredictions(req, (predictions, status) => {
+            if (status === 'OK' && predictions?.length) {
+              const shaped = predictions.slice(0, 4).map(p => ({
+                place_id: p.place_id,
+                description: p.description,
+                main_text: p.structured_formatting?.main_text || p.description.split(',')[0].trim(),
+                secondary_text: p.structured_formatting?.secondary_text || '',
+                lat: null, lon: null
+              }));
+              setPlaceSuggestions(shaped);
+            } else {
+              setPlaceSuggestions([]);
+            }
+          }
+        );
+      } catch { /* ignore */ }
+    }, 150);
+  };
+
+  const handlePlaceSelect = async (prediction) => {
+    setShowPlaceDrop(false);
+    setModalSearch(prediction.description);
+    setPinError(''); setSearchPhase('geocoding');
+    try {
+      await loadGoogleMaps();
+      const geocoder = new window.google.maps.Geocoder();
+      await new Promise(resolve => {
+        geocoder.geocode({ placeId: prediction.place_id }, (results, status) => {
+          if (status === 'OK' && results[0]) {
+            const coords = {
+              lat: results[0].geometry.location.lat(),
+              lon: results[0].geometry.location.lng(),
+            };
+            setUserCoords(coords);
+            setOriginAddress(prediction.main_text || prediction.description.split(',')[0].trim());
+            closeModal();
+            runRouteCalculation(coords, activeData, centerCoords);
+          } else {
+            setSearchPhase(null);
+            setPinError('Could not locate this place. Try another.');
+          }
+          resolve();
+        });
+      });
+    } catch {
+      setSearchPhase(null);
+      setPinError('Could not locate this place. Try another.');
+    }
+  };
+
+  /* ── Find Location / PIN Submit ── */
+  const handleModalSubmit = async (e) => {
     e.preventDefault();
-    const pin = pinInput.trim();
-    if (pin.length < 6) return;
+    const val = modalSearch.trim();
+    if (!val) return;
+    
+    // Check if it's a 6-digit PIN code exactly
+    const isPin = /^\d{6}$/.test(val);
+
     setPinError(''); setSearchPhase('geocoding');
     try {
       let coords = null, addr = '';
 
-      // Primary: Google Maps JS SDK Geocoder (browser-safe, passes Referer automatically)
       if (GOOGLE_MAPS_API_KEY) {
         try {
           await loadGoogleMaps();
           const geocoder = new window.google.maps.Geocoder();
           await new Promise(resolve => {
-            geocoder.geocode({ address: pin, region: 'IN', componentRestrictions: { country: 'in' } }, (results, status) => {
+            geocoder.geocode({ address: val, region: 'IN', componentRestrictions: { country: 'in' } }, (results, status) => {
               if (status === 'OK' && results[0]) {
                 coords = { lat: results[0].geometry.location.lat(), lon: results[0].geometry.location.lng() };
                 addr   = results[0].formatted_address;
@@ -475,13 +590,13 @@ function App() {
               resolve();
             });
           });
-        } catch (err) { console.error('JS SDK Geocode fail', err); }
+        } catch { /* ignore */ }
       }
 
-      // Fallback: Zippopotam
-      if (!coords) {
+      // Fallback for PIN exclusively
+      if (!coords && isPin) {
         try {
-          const res = await fetch(`https://api.zippopotam.us/IN/${pin}`);
+          const res = await fetch(`https://api.zippopotam.us/IN/${val}`);
           if (res.ok) {
             const data = await res.json();
             if (data.places?.[0]) {
@@ -489,35 +604,17 @@ function App() {
               addr   = `${data.places[0]['place name']}, ${data.places[0].state}`;
             }
           }
-        } catch (err) { console.error('Zippopotam fail', err); }
-      }
-
-      // Fallback: PostalPincode + Nominatim
-      if (!coords) {
-        const res2  = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
-        const data2 = await res2.json();
-        if (data2[0]?.Status === 'Success' && data2[0].PostOffice) {
-          const district = data2[0].PostOffice[0].District;
-          const state    = data2[0].PostOffice[0].State;
-          addr = `${district}, ${state}`;
-          const pre = centerCoords.DISTRICT_COORDS?.[district.toUpperCase()];
-          if (pre) { coords = pre; } else {
-            const res3  = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(district+','+state+',India')}&limit=1`, { headers: { 'User-Agent': 'SNEET-Locator/1.0' } });
-            const data3 = await res3.json();
-            if (data3?.[0]) coords = { lat: parseFloat(data3[0].lat), lon: parseFloat(data3[0].lon) };
-          }
-        }
+        } catch { /* ignore */ }
       }
 
       if (!coords) throw new Error('Not found');
       setUserCoords(coords);
-      setOriginAddress(shortAddr(addr, pin));
-      setSearchQuery('');
-      closeModal(); // close immediately after geocoding — routing runs in background
-      runRouteCalculation(coords, activeData, centerCoords); // fire-and-forget
+      setOriginAddress(shortAddr(addr, isPin ? val : '')); 
+      closeModal();
+      runRouteCalculation(coords, activeData, centerCoords);
     } catch {
       setSearchPhase(null);
-      setPinError('PIN code not found. Try a different PIN or search by center/district name.');
+      setPinError('Location not found. Try a different PIN or place.');
     }
   };
 
@@ -530,11 +627,11 @@ function App() {
         const tc = { lat: c.latitude, lon: c.longitude };
         setUserCoords(tc);
         setOriginAddress('Your Location');
-        setSearchQuery('');
-        closeModal(); // close immediately — routing runs in background
-        runRouteCalculation(tc, activeData, centerCoords); // fire-and-forget
+        setModalSearch('');
+        closeModal();
+        runRouteCalculation(tc, activeData, centerCoords);
       },
-      () => { setSearchPhase(null); setPinError('Could not access location. Allow location access or enter your PIN.'); },
+      () => { setSearchPhase(null); setPinError('Could not access location. Please check browser permissions.'); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
@@ -542,26 +639,37 @@ function App() {
   const clearNearest = () => {
     setUserCoords(null); setOriginAddress('');
     setRouteData({}); setHaversineDists({}); setViaData({});
+    setSelectedDistrict('');
   };
 
   /* ── Filtered / sorted centers ── */
   const filteredCenters = useMemo(() => {
     let data = activeData.map(c => {
       const r = routeData[c.id];
+      const hv = haversineDists[c.id];
       if (userCoords && r) return { ...c, roadDistance: r.distance, travelTime: r.time, isApprox: r.isApprox };
+      // Show haversine estimate immediately while OSRM loads
+      if (userCoords && hv != null) return { ...c, roadDistance: Math.max(1, Math.round(hv * 1.35)), travelTime: Math.round((hv * 1.35) / 40 * 3600), isApprox: true };
       return { ...c, roadDistance: null, travelTime: null, isApprox: false };
     });
-    if (userCoords) return [...data].sort((a, b) => {
-      const hvA = haversineDists[a.id] ?? Infinity;
-      const hvB = haversineDists[b.id] ?? Infinity;
-      const dA  = a.roadDistance !== null ? a.roadDistance : hvA * 1.5;
-      const dB  = b.roadDistance !== null ? b.roadDistance : hvB * 1.5;
-      return dA - dB;
-    });
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return data;
-    return data.filter(c => c.centerName.toLowerCase().includes(q) || c.district.toLowerCase().includes(q));
-  }, [searchQuery, activeData, userCoords, routeData, haversineDists]);
+    if (userCoords) {
+      // When in nearest mode: only show centers that have coordinate data.
+      // Centers with no coords at all (roadDistance null AND no haversine) are
+      // excluded — they would just clutter the bottom with no useful info.
+      const withCoords = data.filter(c => haversineDists[c.id] != null);
+      return [...withCoords].sort((a, b) => {
+        const hvA = haversineDists[a.id] ?? Infinity;
+        const hvB = haversineDists[b.id] ?? Infinity;
+        const dA  = a.roadDistance !== null ? a.roadDistance : hvA * 1.5;
+        const dB  = b.roadDistance !== null ? b.roadDistance : hvB * 1.5;
+        return dA - dB;
+      });
+    }
+    if (selectedDistrict) {
+      return data.filter(c => c.district === selectedDistrict);
+    }
+    return data;
+  }, [selectedDistrict, activeData, userCoords, routeData, haversineDists]);
 
   const isSearching = searchPhase !== null;
   const phaseLabel = {
@@ -612,34 +720,62 @@ function App() {
 
             <div className="search-wrapper" ref={searchRef}>
               <div className="search-input-container">
-                <Search className="search-icon" size={20} />
-                <input type="text" className="search-input" placeholder="Search center or district…"
-                  value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
-                  onFocus={() => setShowSuggestions(true)} autoComplete="off" aria-label="Search exam centers" />
-                <button className="clear-search" onClick={() => { setSearchQuery(''); setShowSuggestions(false); }} aria-label="Clear search"><X size={14} /></button>
+                <Search className="search-icon" size={18} />
+                <input 
+                  type="text" 
+                  className="search-input"
+                  placeholder="App Districts & Centers..."
+                  value={selectedDistrict}
+                  onChange={(e) => {
+                    setSelectedDistrict(e.target.value);
+                    setShowPlaceDrop(true);
+                  }}
+                  onFocus={() => setShowPlaceDrop(true)}
+                  aria-label="Search centers or districts"
+                />
+                {selectedDistrict && (
+                  <button className="clear-search" onClick={() => { setSelectedDistrict(''); setShowPlaceDrop(false); }} aria-label="Clear search">
+                    <X size={14} />
+                  </button>
+                )}
               </div>
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="suggestions-dropdown" role="listbox" aria-label="Search suggestions">
-                  {suggestions.map((s, i) => (
-                    <button key={i} className="suggestion-item" role="option"
-                      onMouseDown={e => { e.preventDefault(); setSearchQuery(s.label); setShowSuggestions(false); }}
-                      onTouchEnd={e => { e.preventDefault(); setSearchQuery(s.label); setShowSuggestions(false); }}>
-                      <span className="suggestion-icon">
-                        {s.type==='district' ? <MapPin size={16} strokeWidth={2.5}/> : <School size={16} strokeWidth={2.5}/>}
-                      </span>
-                      <span className="suggestion-text">
-                        <span className="suggestion-label">{s.label}</span>
-                        {s.district && <span className="suggestion-sub">{s.district}</span>}
-                      </span>
+
+              {showPlaceDrop && (
+                <div className="omni-dropdown">
+                  <div className="omni-section">
+                    <div className="omni-section-title">Districts</div>
+                    <button 
+                      className={`suggestion-item ${selectedDistrict === '' ? 'active' : ''}`}
+                      onClick={() => { setSelectedDistrict(''); setShowPlaceDrop(false); }}
+                    >
+                      <MapPin size={16} className="suggest-ico" />
+                      <div className="suggest-info">
+                        <div className="suggest-name">All Districts & Centers</div>
+                      </div>
                     </button>
-                  ))}
+                    {uniqueDistricts
+                      .filter(d => d.toLowerCase().includes(selectedDistrict.toLowerCase()))
+                      .map(d => (
+                        <button 
+                          key={d}
+                          className={`suggestion-item ${selectedDistrict === d ? 'active' : ''}`}
+                          onClick={() => { setSelectedDistrict(d); setShowPlaceDrop(false); }}
+                        >
+                          <MapPin size={16} className="suggest-ico" />
+                          <div className="suggest-info">
+                            <div className="suggest-name">{d}</div>
+                          </div>
+                        </button>
+                      ))
+                    }
+                  </div>
                 </div>
               )}
             </div>
 
-            <button ref={findNearestBtnRef} className="find-nearest-btn"
+            <button className="find-nearest-btn"
               onClick={() => { setShowPinModal(true); setPinError(''); }}
-              aria-label="Find nearest exam center by PIN or GPS location">
+              aria-label="Find nearest exam center">
               <Crosshair size={18} />
               <span>Find Nearest Center</span>
             </button>
@@ -655,7 +791,7 @@ function App() {
           </div>
         </aside>
 
-        {/* ── PIN MODAL ── */}
+        {/* ── FIND NEAREST MODAL ── */}
         {showPinModal && (
           <div className="pin-modal-overlay" onClick={closeModal}>
             <div className="pin-modal-content" onClick={e => e.stopPropagation()}>
@@ -679,15 +815,52 @@ function App() {
                   </div>
                 ) : (
                   <>
-                    <form onSubmit={handlePinSubmit} className="modern-pin-form">
-                      <div className="input-group-compact">
-                        <input type="text" pattern="[0-9]*" inputMode="numeric" maxLength="6"
-                          placeholder="Your PIN code" className="premium-pin-input" value={pinInput}
-                          onChange={e => { setPinInput(e.target.value.replace(/\D/g,'')); setPinError(''); }}
-                          autoFocus aria-label="Enter your 6-digit PIN code" />
-                        <button type="submit" className="premium-search-btn" disabled={pinInput.length < 6}>
-                          <Search size={18} />
-                        </button>
+                    <form onSubmit={handleModalSubmit} className="modern-pin-form">
+                      <div className="place-search-wrap" ref={searchRef}>
+                        <div className="input-group-compact">
+                          <MapPin size={16} style={{color:'var(--text-3)',flexShrink:0,marginLeft:'0.3rem'}}/>
+                          <input
+                            type="text"
+                            placeholder="Enter PIN Code or Place Name…"
+                            className="premium-pin-input"
+                            style={{fontSize:'0.95rem',letterSpacing:0,fontWeight:500}}
+                            value={modalSearch}
+                            onChange={e => handleModalInput(e.target.value)}
+                            onFocus={() => { if(modalSearch.length > 1) setShowPlaceDrop(true); }}
+                            autoComplete="off"
+                            autoFocus
+                            aria-label="Search location"
+                          />
+                          {modalSearch && (
+                            <button type="button" style={{background:'none',border:'none',cursor:'pointer',padding:'0 0.4rem',color:'var(--text-3)'}}
+                              onClick={() => { setModalSearch(''); setPlaceSuggestions([]); setShowPlaceDrop(false); }}>
+                              <X size={15}/>
+                            </button>
+                          )}
+                          <button type="submit" className="premium-search-btn" disabled={!modalSearch.trim()}>
+                            <Search size={18} />
+                          </button>
+                        </div>
+
+                        {showPlaceDrop && placeSuggestions.length > 0 && (
+                          <div className="place-suggestions-drop">
+                            {placeSuggestions.map((p) => (
+                              <button
+                                key={p.place_id}
+                                type="button"
+                                className="place-suggestion-item"
+                                onMouseDown={e => { e.preventDefault(); handlePlaceSelect(p); }}
+                                onTouchEnd={e => { e.preventDefault(); handlePlaceSelect(p); }}
+                              >
+                                <MapPin size={14} style={{color:'var(--primary)',flexShrink:0}}/>
+                                <span className="place-suggestion-text">
+                                  <span className="place-main">{p.main_text}</span>
+                                  <span className="place-sub">{p.secondary_text}</span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className="modal-divider-compact"><span>OR</span></div>
@@ -701,10 +874,6 @@ function App() {
                         <div className="pin-error-msg-modern" role="alert">{pinError}</div>
                       )}
                     </form>
-                    
-                    <p className="pin-modal-footer-note">
-                      * For international locations, please search directly in the main search bar.
-                    </p>
                   </>
                 )}
               </div>
@@ -714,6 +883,27 @@ function App() {
 
         {/* ── MAIN CONTENT ── */}
         <main className="main-content">
+
+          {/* List / Map toggle */}
+          {!loading && !errorMsg && (
+            <div className="view-toggle-bar">
+              <button
+                className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+                onClick={() => setViewMode('list')}
+                aria-label="List view"
+              >
+                <LayoutList size={16} /> List
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'map' ? 'active' : ''}`}
+                onClick={() => setViewMode('map')}
+                aria-label="Map view"
+              >
+                <Map size={16} /> Map
+              </button>
+            </div>
+          )}
+
           {loading ? renderSkeletons() : errorMsg ? (
             <div className="empty-state">
               <div className="empty-state-icon"><X size={28}/></div>
@@ -721,27 +911,40 @@ function App() {
             </div>
           ) : (
             <>
+              {/* MAP VIEW */}
+              {viewMode === 'map' && (
+                <MapView
+                  centers={filteredCenters}
+                  userCoords={userCoords}
+                  routeData={routeData}
+                  resolvedCoords={resolvedCoords}
+                  centerCoords={centerCoords}
+                />
+              )}
 
-
-              {filteredCenters.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-state-icon"><Building size={28}/></div>
-                  <h3>No centers found</h3><p>Try adjusting your search terms.</p>
-                </div>
-              ) : (
-                <div className="centers-grid">
+              {/* LIST VIEW */}
+              {viewMode === 'list' && (
+                <>
+                  {filteredCenters.length === 0 ? (
+                    <div className="empty-state">
+                      <div className="empty-state-icon"><Building size={28}/></div>
+                      <h3>No centers found</h3><p>Try adjusting your search terms.</p>
+                    </div>
+                  ) : (
+                    <div className="centers-grid">
                   {filteredCenters.map((center, index) => {
                     const showHeading = index === 0 || center.district !== filteredCenters[index-1].district;
 
-                    // ── Get Directions / Navigate URL ──
-                    const originParam = (userCoords && originAddress && originAddress !== 'Your Location')
-                      ? encodeURIComponent(originAddress)
-                      : userCoords ? `${userCoords.lat},${userCoords.lon}` : '';
-                    const cleanName   = center.centerName.replace(/\s*\n\s*/g, ', ').trim();
-                    const destSearch  = encodeURIComponent(`${cleanName}, ${center.district}, India`);
-                    const directionsUrl = userCoords
-                      ? `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${destSearch}&travelmode=driving`
-                      : (center.mapLink || `https://www.google.com/maps/search/?api=1&query=${destSearch}`);
+                    // ── Navigate URL logic ──
+                    // Priority 1: verified sheet link → use as-is
+                    // Priority 2: auto-geocoded coords → build Maps search URL (with popup warning)
+                    // Priority 3: nothing → disabled
+                    const sheetUrl = center.mapLink || '';
+                    const autoCoords = resolvedCoords[center.centerName] || activeData.find(d => d.id === center.id)?.coords;
+                    const autoNavUrl = !sheetUrl && autoCoords
+                      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(center.centerName + ', ' + center.district + ', India')}`
+                      : null;
+                    const directionsUrl = sheetUrl;  // only the verified sheet link is used directly
 
 
                     return (
@@ -751,6 +954,19 @@ function App() {
                         )}
                           <div className="center-card" style={{ animationDelay: `${Math.min(index*0.025, 0.5)}s` }}>
 
+                            {/* Center Location Preview thumbnail */}
+                            {autoCoords && (autoCoords.lat || autoCoords.lng) && index < 20 && GOOGLE_MAPS_API_KEY && (
+                              <div className="card-map-thumbnail" onClick={() => setSelectedCenterModal({ center, centerCoords: autoCoords })} style={{cursor:'pointer'}}>
+                                <img
+                                  src={`https://maps.googleapis.com/maps/api/staticmap?center=${autoCoords.lat},${autoCoords.lng || autoCoords.lon}&zoom=14&size=400x120&markers=color:red%7C${autoCoords.lat},${autoCoords.lng || autoCoords.lon}&key=${GOOGLE_MAPS_API_KEY}`}
+                                  alt="Map Preview"
+                                  loading="lazy"
+                                  className="card-map-img"
+                                  onError={(e) => { e.target.parentElement.style.display='none'; }}
+                                />
+                              </div>
+                            )}
+
                             <div className="card-top">
                               <h3 className="center-title">
                                 {userCoords && index < 3 && center.roadDistance !== null && (
@@ -759,16 +975,14 @@ function App() {
                                 {center.centerName}
                               </h3>
                               <div className="card-top-right">
-                              {center.roadDistance !== null ? (
-                                <>
-                                  <div className="distance-badge">
-                                    {center.isApprox ? '~' : ''}{center.roadDistance < 1 ? '< 1' : center.roadDistance} km
-                                  </div>
-                                  <div className="time-badge">{formatTime(center.travelTime)}</div>
-                                </>
-                              ) : userCoords ? (
-                                <div className="no-route-badge">No route</div>
-                              ) : null}
+                                {center.roadDistance !== null ? (
+                                  <>
+                                    <div className="distance-badge">
+                                      {center.isApprox ? '~' : ''}{center.roadDistance < 1 ? '< 1' : center.roadDistance} km
+                                    </div>
+                                    <div className="time-badge">{formatTime(center.travelTime)}</div>
+                                  </>
+                                ) : null}
                             </div>
                           </div>
 
@@ -800,24 +1014,78 @@ function App() {
                           </div>
 
                           <div className="card-footer">
-                            {center.phone
-                              ? <a href={`tel:${center.phone.replace(/[^0-9+]/g,'')}`} className="action-btn btn-outline"><Phone size={17}/> Call Desk</a>
-                              : <div></div>}
-                            <a href={directionsUrl} target="_blank" rel="noopener noreferrer" className="action-btn btn-primary">
-                              <Navigation size={17}/> {userCoords ? 'Get Directions' : 'Navigate'}
-                            </a>
+                             {center.phone && (
+                               <a href={`tel:${center.phone.replace(/[^0-9+]/g,'')}`} className="action-btn btn-outline" style={{padding: '0.6rem 1rem'}}>
+                                 <Phone size={17}/> Call
+                               </a>
+                             )}
+                             {directionsUrl
+                               ? <a href={directionsUrl} target="_blank" rel="noopener noreferrer" className="action-btn btn-primary" style={{padding: '0.6rem 1rem', flex: 1}}>
+                                   <Navigation size={17}/> Navigate
+                                 </a>
+                               : autoNavUrl
+                                 ? <button
+                                     className="action-btn btn-primary btn-auto-nav"
+                                     title="Auto-detected location – tap to verify before navigating"
+                                     onClick={() => setAutoNavPopup({ url: autoNavUrl, centerName: center.centerName, district: center.district })}
+                                     style={{padding: '0.6rem 1rem', flex: 1}}
+                                   >
+                                     <Navigation size={17}/> Navigate *
+                                   </button>
+                                 : <span className="action-btn btn-primary btn-disabled" title="Map link not added yet" style={{padding: '0.6rem 1rem', flex: 1}}>
+                                     <Navigation size={17}/> No Link Yet
+                                   </span>
+                             }
                           </div>
                         </div>
                       </React.Fragment>
                     );
                   })}
-                </div>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
         </main>
-
       </div>
+
+      {selectedCenterModal && (
+        <CenterDetailsModal 
+          center={selectedCenterModal.center} 
+          userCoords={userCoords} 
+          centerCoords={selectedCenterModal.centerCoords} 
+          onClose={() => setSelectedCenterModal(null)} 
+        />
+      )}
+
+      {/* ── AUTO-NAV CONFIRMATION POPUP ── */}
+      {autoNavPopup && (
+        <div className="autonav-overlay" onClick={() => setAutoNavPopup(null)}>
+          <div className="autonav-modal" onClick={e => e.stopPropagation()}>
+            <div className="autonav-header">
+              <span className="autonav-icon">📍</span>
+              <h3 className="autonav-title">Verify Location</h3>
+            </div>
+            <p className="autonav-body" style={{marginBottom: '1.5rem'}}>
+              Please double-check the map pin for <strong>{autoNavPopup.centerName}</strong> before starting your trip to ensure accuracy.
+            </p>
+            <div className="autonav-actions">
+              <button className="autonav-cancel" onClick={() => setAutoNavPopup(null)}>Cancel</button>
+              <a
+                href={autoNavPopup.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="autonav-confirm"
+                onClick={() => setAutoNavPopup(null)}
+              >
+                <Navigation size={15}/> Open in Maps
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
