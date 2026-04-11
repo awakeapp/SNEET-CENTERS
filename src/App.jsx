@@ -612,9 +612,9 @@ function App() {
 
             <button ref={findNearestBtnRef} className="find-nearest-btn"
               onClick={() => { setShowPinModal(true); setPinError(''); loadGoogleMaps(); }}
-              aria-label="Find nearest exam center by PIN or GPS location">
+              aria-label="Click to find nearest exam center by PIN or GPS location">
               <Crosshair size={18} />
-              <span>Find Nearest Center</span>
+              <span>Click to Find Nearest Center</span>
             </button>
 
             <div className="search-wrapper" ref={searchRef}>
