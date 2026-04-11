@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Search, MapPin, Phone, Building, Navigation, User, X, School, Map, Crosshair, Clock } from 'lucide-react'; // v1.1.0
+import { Search, MapPin, Phone, Building, Navigation, User, X, School, Map, Crosshair, Clock, Car } from 'lucide-react'; // v1.1.0
 import Papa from 'papaparse';
 import './index.css';
 
@@ -817,9 +817,9 @@ function App() {
                               </div>
                             )}
 
-                            {viaData[center.id] && (
+                             {viaData[center.id] && (
                               <div className="info-row via-route">
-                                <Navigation className="info-icon" size={16} style={{transform: 'rotate(90deg)'}} />
+                                <Car className="info-icon" size={16} />
                                 <span className="info-text via-text">{viaData[center.id]}</span>
                               </div>
                             )}
