@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Search, MapPin, Phone, Building, Navigation, User, X, School, Map, Crosshair, Clock } from 'lucide-react';
+import { Search, MapPin, Phone, Building, Navigation, User, X, School, Map, Crosshair, Clock } from 'lucide-react'; // v1.1.0
 import Papa from 'papaparse';
 import './index.css';
 
